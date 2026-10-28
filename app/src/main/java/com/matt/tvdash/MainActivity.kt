@@ -1,6 +1,7 @@
 package com.matt.tvdash
 
 import android.content.Intent
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -11,6 +12,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -18,6 +20,10 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.qrcode.QRCodeWriter
+import java.net.Inet4Address
+import java.net.NetworkInterface
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -26,6 +32,7 @@ import kotlin.random.Random
 
 private const val FAV = "★ Favourites"
 private const val RECENT = "⟲ Recent"
+private const val SETUP = "📱 Phone setup"
 private const val IDLE_MS = 5 * 60_000L   // screensaver after 5 minutes without a key press
 
 class MainActivity : AppCompatActivity() {
@@ -44,7 +51,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saverDate: TextView
     private lateinit var saverAvs: TextView
     private var lastScores: List<TickerItem>? = null
-    private var favScore: Int? = null
+    private lateinit var setup: LinearLayout
+    private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
     private val ui = Handler(Looper.getMainLooper())
     private val idle = Runnable { showSaver() }
@@ -54,6 +62,8 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         prefs = Prefs(this)
+        Config.load(prefs)
+        val url = setupUrl()
         fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
         val root = LinearLayout(this).apply {
@@ -67,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         header.addView(text("TV Dash", 30f, true), LinearLayout.LayoutParams(0, -2, 1f))
         clock = text("", 26f, false); header.addView(clock)
         root.addView(header)
+        root.addView(text("📱 Phone setup: $url", 14f, false).apply { setTextColor(Theme.silver) })
         root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) })
 
         // Apps row
@@ -76,7 +87,8 @@ class MainActivity : AppCompatActivity() {
 
         // Categories
         root.addView(section("Free Live TV"))
-        catAdapter = TileAdapter(160, 50, textOnly = true, onClick = { category = it.key; showChannels() })
+        catAdapter = TileAdapter(160, 50, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; showChannels() } })
+        catAdapter.items = listOf(SETUP, FAV, RECENT, "All").map { Tile(it, it) }
         root.addView(hRow(catAdapter), LinearLayout.LayoutParams(-1, dp(70)))
 
         // Channels grid
@@ -95,7 +107,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(ticker, LinearLayout.LayoutParams(-1, dp(100)).apply { topMargin = dp(6) })
 
         // Avalanche goal alert
-        goal = text("🚨  AVALANCHE GOAL!  🚨", 48f, true).apply {
+        goal = text("", 44f, true).apply {
             gravity = Gravity.CENTER
             setPadding(dp(48), dp(24), dp(48), dp(24))
             visibility = View.GONE
@@ -118,14 +130,32 @@ class MainActivity : AppCompatActivity() {
             addView(saverBox, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         }
 
+        // Phone setup: QR code that opens the settings page on your phone
+        setup = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(32), dp(32), dp(32), dp(32))
+            visibility = View.GONE
+            background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(Theme.night); setStroke(dp(4), Theme.steel) }
+            addView(text("Scan with your phone", 28f, true))
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qr(url, dp(260))) },
+                LinearLayout.LayoutParams(dp(260), dp(260)).apply { topMargin = dp(16); bottomMargin = dp(16) })
+            addView(text(url, 22f, false).apply { setTextColor(Theme.ice) })
+            addView(text("Phone must be on the same Wi-Fi · any key closes", 16f, false).apply { setTextColor(Theme.silver) })
+        }
+
         setContentView(FrameLayout(this).apply {
             addView(root, FrameLayout.LayoutParams(-1, -1))
             addView(saver, FrameLayout.LayoutParams(-1, -1))
+            addView(setup, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
             addView(goal, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         })
         tick()
         loadChannels()
         loadScores()
+        GoalWatch.start()
+        SetupServer.onSaved = { reload() }
+        SetupServer.start(prefs)
     }
 
     override fun onResume() {
@@ -133,11 +163,16 @@ class MainActivity : AppCompatActivity() {
         loadApps()
         if (allChannels.isNotEmpty()) showChannels()   // refresh Recent and guide titles
         resetIdle()
+        GoalWatch.listener = { showGoal(it) }
     }
 
-    override fun onPause() { super.onPause(); ui.removeCallbacks(idle) }
+    override fun onPause() { super.onPause(); ui.removeCallbacks(idle); GoalWatch.listener = null }
 
-    override fun onDestroy() { ui.removeCallbacksAndMessages(null); super.onDestroy() }
+    override fun onDestroy() {
+        ui.removeCallbacksAndMessages(null)
+        GoalWatch.stop(); SetupServer.stop(); SetupServer.onSaved = null
+        super.onDestroy()
+    }
 
     // ---------- Sports ticker + Avalanche game mode ----------
     private fun loadScores() {
@@ -146,7 +181,6 @@ class MainActivity : AppCompatActivity() {
             ui.post {
                 if (isDestroyed) return@post
                 val fav = items.filterIsInstance<TickerItem.Game>().firstOrNull { it.isFav }
-                checkGoal(fav)
                 saverAvs.text = favLine(fav)
                 if (items != lastScores) { lastScores = items; ticker.setItems(items) }
                 // Check more often while the Avs are playing so goal alerts arrive sooner
@@ -155,14 +189,9 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun checkGoal(g: TickerItem.Game?) {
-        val score = g?.favScore
-        val before = favScore
-        if (g?.state == "live" && score != null && before != null && score > before) showGoal()
-        favScore = score
-    }
-
-    private fun showGoal() {
+    // Goal alerts come from GoalWatch (NHL feed, every 10 s during a live game)
+    private fun showGoal(scorer: String) {
+        goal.text = "🚨  ${goalTitle()}  🚨\n$scorer"
         goal.visibility = View.VISIBLE
         goal.scaleX = 0.4f; goal.scaleY = 0.4f
         goal.animate().scaleX(1f).scaleY(1f).setDuration(300).start()
@@ -192,8 +221,8 @@ class MainActivity : AppCompatActivity() {
     // Any key wakes the dashboard; that key press is swallowed so it doesn't also click something
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         resetIdle()
-        if (saver.visibility == View.VISIBLE && e.action == KeyEvent.ACTION_DOWN) {
-            saver.visibility = View.GONE; swallowUp = true; return true
+        if ((saver.visibility == View.VISIBLE || setup.visibility == View.VISIBLE) && e.action == KeyEvent.ACTION_DOWN) {
+            saver.visibility = View.GONE; setup.visibility = View.GONE; swallowUp = true; return true
         }
         if (swallowUp && e.action == KeyEvent.ACTION_UP) { swallowUp = false; return true }
         return super.dispatchKeyEvent(e)
@@ -222,27 +251,38 @@ class MainActivity : AppCompatActivity() {
     }
 
     // ---------- Channels ----------
-    private fun loadChannels() = thread {
-        val list = try { M3U.load() } catch (e: Exception) {
-            ui.post { status.text = "Couldn't load playlist: ${e.message}" }; return@thread
+    private fun loadChannels() {
+        val my = ++gen
+        thread {
+            val list = try { M3U.loadAll(Config.playlists) } catch (e: Exception) {
+                ui.post { if (my == gen) status.text = "Couldn't load playlist: ${e.message}  ·  use $SETUP to change it" }
+                return@thread
+            }
+            ui.post { if (my == gen) { allChannels = list; buildCategories(); showChannels() } }
+
+            // TV guide
+            val epg = Config.epg.ifBlank { M3U.epgUrl.orEmpty() }
+            if (epg.isNotBlank()) try {
+                Epg.load(epg, list.mapNotNull { it.tvgId }.toSet())
+                ui.post { if (my == gen) showChannels() }
+            } catch (_: Exception) { }
+
+            // Hide streams that don't answer
+            val dead = StreamCheck.run(list)
+            ui.post { if (my == gen) { Session.dead = dead; showChannels() } }
         }
-        ui.post { allChannels = list; buildCategories(); showChannels() }
+    }
 
-        // TV guide
-        val epg = EPG_URL.ifBlank { M3U.epgUrl.orEmpty() }
-        if (epg.isNotBlank()) try {
-            Epg.load(epg, list.mapNotNull { it.tvgId }.toSet())
-            ui.post { showChannels() }
-        } catch (_: Exception) { }
-
-        // Hide streams that don't answer
-        val dead = StreamCheck.run(list)
-        ui.post { Session.dead = dead; showChannels() }
+    // Settings were saved from the phone
+    private fun reload() {
+        Session.dead = emptySet(); Epg.guide = emptyMap()
+        status.text = "Settings saved · reloading channels…"
+        loadChannels()
     }
 
     private fun buildCategories() {
         val groups = allChannels.map { it.group }.distinct().sorted()
-        catAdapter.items = (listOf(FAV, RECENT, "All") + groups).map { Tile(it, it) }
+        catAdapter.items = (listOf(SETUP, FAV, RECENT, "All") + groups).map { Tile(it, it) }
         if (prefs.get("ch").isEmpty()) category = "All"
     }
 
@@ -281,6 +321,24 @@ class MainActivity : AppCompatActivity() {
         saverDate.text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now)
         if (saver.visibility == View.VISIBLE) drift()
         ui.postDelayed({ tick() }, 30_000)
+    }
+
+    private fun showSetup() { setup.visibility = View.VISIBLE }
+
+    // Address of the setup page: the TV's own Wi-Fi/Ethernet address
+    private fun setupUrl(): String {
+        val ip = try {
+            NetworkInterface.getNetworkInterfaces().toList().filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.toList() }
+                .firstOrNull { it is Inet4Address && it.isSiteLocalAddress }?.hostAddress
+        } catch (_: Exception) { null }
+        return "http://${ip ?: "<TV address>"}:${SetupServer.PORT}"
+    }
+
+    private fun qr(s: String, size: Int): Bitmap {
+        val m = QRCodeWriter().encode(s, BarcodeFormat.QR_CODE, size, size)
+        val px = IntArray(size * size) { if (m.get(it % size, it / size)) Color.BLACK else Color.WHITE }
+        return Bitmap.createBitmap(px, size, size, Bitmap.Config.ARGB_8888)
     }
 
     // Add your own image as app/src/main/res/drawable/centre_ice.png to show it at centre ice

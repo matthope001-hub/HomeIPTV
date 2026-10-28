@@ -5,9 +5,6 @@ import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-// Your team's abbreviation: gets pinned first in the ticker and triggers goal alerts
-const val FAV_TEAM = "COL"
-
 // One team line on a ticker card
 data class TeamLine(val abbr: String, val logo: String?, val record: String, val score: Int?)
 
@@ -15,8 +12,8 @@ data class TeamLine(val abbr: String, val logo: String?, val record: String, val
 sealed class TickerItem {
     data class League(val name: String) : TickerItem()
     data class Game(val league: String, val state: String, val status: String, val away: TeamLine, val home: TeamLine) : TickerItem() {
-        val isFav get() = league == "NHL" && (away.abbr == FAV_TEAM || home.abbr == FAV_TEAM)
-        val favScore get() = if (home.abbr == FAV_TEAM) home.score else away.score
+        val isFav get() = league == "NHL" && (away.abbr == Config.team || home.abbr == Config.team)
+        val favScore get() = if (home.abbr == Config.team) home.score else away.score
     }
 }
 

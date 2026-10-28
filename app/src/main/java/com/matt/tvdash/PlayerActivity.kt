@@ -23,6 +23,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private lateinit var player: ExoPlayer
     private lateinit var osd: TextView
+    private lateinit var goal: TextView
     private val ui = Handler(Looper.getMainLooper())
     private var idx = 0
     private var prev = -1            // last channel, for Back
@@ -43,9 +44,15 @@ class PlayerActivity : AppCompatActivity() {
             background = GradientDrawable().apply { cornerRadius = 16f; setColor(Color.parseColor("#D96F263D")); setStroke(4, Theme.steel) }
             setPadding(40, 20, 40, 20)
         }
+        goal = TextView(this).apply {
+            textSize = 30f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; visibility = android.view.View.GONE
+            background = GradientDrawable().apply { cornerRadius = 20f; setColor(Theme.burgundy); setStroke(6, Theme.steel) }
+            setPadding(48, 24, 48, 24)
+        }
         val root = FrameLayout(this)
         root.addView(view)
         root.addView(osd, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(48, 48, 0, 0) })
+        root.addView(goal, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 48 })
         setContentView(root)
 
         player.addListener(object : Player.Listener {
@@ -100,6 +107,18 @@ class PlayerActivity : AppCompatActivity() {
         }
         else -> super.onKeyDown(code, e)
     }
+
+    // Goal alerts while you watch
+    override fun onResume() {
+        super.onResume()
+        GoalWatch.listener = { scorer ->
+            goal.text = "🚨  ${goalTitle()}  🚨\n$scorer"
+            goal.visibility = android.view.View.VISIBLE
+            goal.postDelayed({ goal.visibility = android.view.View.GONE }, 8_000)
+        }
+    }
+
+    override fun onPause() { super.onPause(); GoalWatch.listener = null }
 
     override fun onStop() { super.onStop(); player.pause() }
     override fun onStart() { super.onStart(); if (::player.isInitialized) player.play() }

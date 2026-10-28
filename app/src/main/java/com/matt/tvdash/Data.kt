@@ -19,6 +19,18 @@ const val PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/ca.m3u"
 // XMLTV guide (.xml or .xml.gz). Leave blank to use the playlist's own x-tvg-url header.
 const val EPG_URL = ""
 
+// Live settings: the defaults above, changed from the phone setup page
+object Config {
+    @Volatile var playlists: List<String> = listOf(PLAYLIST_URL)
+    @Volatile var epg: String = EPG_URL
+    @Volatile var team: String = "COL"
+    fun load(p: Prefs) {
+        playlists = p.playlists().ifEmpty { listOf(PLAYLIST_URL) }
+        epg = p.str("epg", EPG_URL)
+        team = p.str("team", "COL")
+    }
+}
+
 // Network read with timeouts so a dead host can't hang a thread forever
 fun openStream(url: String): InputStream = URL(url).openConnection().run {
     connectTimeout = 10_000; readTimeout = 30_000
@@ -44,6 +56,14 @@ object Session {
 
 object M3U {
     var epgUrl: String? = null
+
+    /** Loads every playlist and merges them; fails only if none load */
+    fun loadAll(urls: List<String>): List<Channel> {
+        var error: Exception? = null
+        val out = urls.flatMap { u -> try { load(u) } catch (e: Exception) { error = e; emptyList() } }
+        if (out.isEmpty()) error?.let { throw it }
+        return out.distinctBy { it.url }
+    }
 
     fun load(url: String = PLAYLIST_URL): List<Channel> {
         val text = httpGet(url)
@@ -153,6 +173,12 @@ class Prefs(ctx: Context) {
         sp.edit().putStringSet(set, s).apply()
         return added
     }
+
+    // Settings from the phone setup page
+    fun playlists(): List<String> = str("playlists", "").split('\n').filter { it.isNotBlank() }
+    fun str(key: String, def: String): String = sp.getString(key, def) ?: def
+    fun saveSettings(playlists: List<String>, epg: String, team: String) =
+        sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team).apply()
 
     // Last 10 channels watched, newest first
     fun recent(): List<String> = sp.getString("recent", "").orEmpty().split('\n').filter { it.isNotEmpty() }

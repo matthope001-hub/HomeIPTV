@@ -29,4 +29,5 @@ dependencies {
     implementation("androidx.media3:media3-exoplayer-hls:1.4.1")
     implementation("androidx.media3:media3-ui:1.4.1")
     implementation("io.coil-kt:coil:2.6.0")
+    implementation("com.google.zxing:core:3.5.3")   // QR code for phone setup
 }
