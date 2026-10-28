@@ -52,10 +52,11 @@ object SetupServer {
             String(buf, 0, n, Charsets.UTF_8)
         } else ""
 
-        val html = if (method == "POST" && path == "/save") {
-            save(body, prefs)
-            page("Saved ✓ The TV is reloading channels.")
-        } else page(null)
+        val html = when {
+            method == "POST" && path == "/save" -> { save(body, prefs); page("Saved ✓ The TV is reloading channels.") }
+            method == "POST" && path == "/test" -> page(testHorn())
+            else -> page(null)
+        }
         val bytes = html.toByteArray()
         c.getOutputStream().apply {
             write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
@@ -86,6 +87,13 @@ object SetupServer {
         ui.post { onSaved?.invoke() }
     }
 
+    // Runs a full goal alert (banner, red light, horn) on whatever TV Dash screen is showing
+    private fun testHorn(): String {
+        if (GoalWatch.listener == null) return "Open TV Dash on the TV first, then press Test horn again."
+        ui.post { GoalFx.forceHorn = true; GoalWatch.listener?.invoke("Test from your phone") }
+        return "Playing the goal horn on the TV."
+    }
+
     private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
     private fun page(msg: String?) = """<!doctype html><html><head><meta charset="utf-8">
@@ -114,5 +122,9 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <label><input type="checkbox" name="horn" value="on" ${if (Config.horn) "checked" else ""} style="width:auto"> Goal horn sound</label>
 <small>The red goal light always flashes; this turns the horn on or off.</small>
 <button>Save</button>
+</form>
+<form method="post" action="/test">
+<button style="background:#6F263D">🚨 Test horn</button>
+<small>Plays the goal banner, red light and horn on the TV, even if the horn is switched off.</small>
 </form></main></body></html>"""
 }

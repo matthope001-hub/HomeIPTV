@@ -15,6 +15,8 @@ You build the app on your computer once, then send it to the TV over Wi-Fi (opti
 ### Goal horn
 The Avalanche goal horn is included at `app/src/main/res/raw/goal_horn.mp3` and is built into the app. To use a different sound, replace that file (keep the name lowercase, `.mp3`, `.ogg` or `.wav`) and build again. Only the first 10 seconds play, fading out at the end. Delete the file to go back to the horn generated in code.
 
+To hear it, open TV Dash on the TV, then on the phone setup page press **🚨 Test horn**.
+
 ## 2. Get the TV ready (once)
 
 1. **Turn on Developer options:** on the TV go to **Settings ▸ System ▸ About**, scroll to **Android TV OS build** and press OK on it 7 times until it says you're a developer.

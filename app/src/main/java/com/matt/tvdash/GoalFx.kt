@@ -19,9 +19,11 @@ import kotlin.math.sin
  * add it as app/src/main/res/raw/goal_horn.mp3 (or .ogg/.wav). Only the first 10 seconds play.
  */
 object GoalFx {
+    var forceHorn = false   // set by "Test horn" so the test plays even with the horn switched off
 
     fun play(ctx: Context, light: View) {
-        if (Config.horn) horn(ctx.applicationContext)
+        if (Config.horn || forceHorn) horn(ctx.applicationContext)
+        forceHorn = false
         flash(light)
     }
 
