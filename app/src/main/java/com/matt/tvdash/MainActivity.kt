@@ -47,6 +47,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var status: TextView
     private lateinit var ticker: TickerView
     private lateinit var goal: TextView
+    private lateinit var light: View
     private lateinit var saver: FrameLayout
     private lateinit var saverBox: LinearLayout
     private lateinit var saverClock: TextView
@@ -185,6 +186,8 @@ class MainActivity : AppCompatActivity() {
             addView(root, FrameLayout.LayoutParams(-1, -1))
             addView(saver, FrameLayout.LayoutParams(-1, -1))
             addView(setup, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
+            light = View(this@MainActivity).apply { setBackgroundColor(Color.parseColor("#C8102E")); visibility = View.GONE }
+            addView(light, FrameLayout.LayoutParams(-1, -1))
             addView(goal, FrameLayout.LayoutParams(-2, -2, Gravity.CENTER))
         })
         tick()
@@ -229,6 +232,7 @@ class MainActivity : AppCompatActivity() {
     // Goal alerts come from GoalWatch (NHL feed, every 10 s during a live game)
     private fun showGoal(scorer: String) {
         goal.text = "🚨  ${goalTitle()}  🚨\n$scorer"
+        GoalFx.play(this, light)
         goal.visibility = View.VISIBLE
         goal.scaleX = 0.4f; goal.scaleY = 0.4f
         goal.animate().scaleX(1f).scaleY(1f).setDuration(300).start()

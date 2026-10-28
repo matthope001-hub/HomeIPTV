@@ -81,7 +81,7 @@ object SetupServer {
         val playlists = form["playlists"].orEmpty().lines().map { it.trim() }.filter { it.startsWith("http") }
         val epg = form["epg"].orEmpty().trim().takeIf { it.isEmpty() || it.startsWith("http") }.orEmpty()
         val team = form["team"].orEmpty().trim().uppercase().filter { it.isLetter() }.take(3).ifEmpty { "COL" }
-        prefs.saveSettings(playlists, epg, team)
+        prefs.saveSettings(playlists, epg, team, form["horn"] == "on")
         Config.load(prefs)
         ui.post { onSaved?.invoke() }
     }
@@ -111,6 +111,8 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <label>Favourite NHL team</label>
 <input name="team" value="${esc(Config.team)}" maxlength="3" placeholder="COL">
 <small>3-letter code. Gets the ticker spot and goal alerts.</small>
+<label><input type="checkbox" name="horn" value="on" ${if (Config.horn) "checked" else ""} style="width:auto"> Goal horn sound</label>
+<small>The red goal light always flashes; this turns the horn on or off.</small>
 <button>Save</button>
 </form></main></body></html>"""
 }

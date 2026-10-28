@@ -24,10 +24,12 @@ object Config {
     @Volatile var playlists: List<String> = listOf(PLAYLIST_URL)
     @Volatile var epg: String = EPG_URL
     @Volatile var team: String = "COL"
+    @Volatile var horn: Boolean = true
     fun load(p: Prefs) {
         playlists = p.playlists().ifEmpty { listOf(PLAYLIST_URL) }
         epg = p.str("epg", EPG_URL)
         team = p.str("team", "COL")
+        horn = p.str("horn", "on") == "on"
     }
 }
 
@@ -184,8 +186,9 @@ class Prefs(ctx: Context) {
     // Settings from the phone setup page
     fun playlists(): List<String> = str("playlists", "").split('\n').filter { it.isNotBlank() }
     fun str(key: String, def: String): String = sp.getString(key, def) ?: def
-    fun saveSettings(playlists: List<String>, epg: String, team: String) =
-        sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team).apply()
+    fun saveSettings(playlists: List<String>, epg: String, team: String, horn: Boolean) =
+        sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team)
+            .putString("horn", if (horn) "on" else "off").apply()
 
     // Tile order you set with Move, per row
     fun order(row: String): List<String> = str("order_$row", "").split('\n').filter { it.isNotEmpty() }

@@ -24,6 +24,7 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var player: ExoPlayer
     private lateinit var osd: TextView
     private lateinit var goal: TextView
+    private lateinit var light: android.view.View
     private val ui = Handler(Looper.getMainLooper())
     private var idx = 0
     private var prev = -1            // last channel, for Back
@@ -52,6 +53,8 @@ class PlayerActivity : AppCompatActivity() {
         val root = FrameLayout(this)
         root.addView(view)
         root.addView(osd, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.START).apply { setMargins(48, 48, 0, 0) })
+        light = android.view.View(this).apply { setBackgroundColor(Color.parseColor("#C8102E")); visibility = android.view.View.GONE }
+        root.addView(light, FrameLayout.LayoutParams(-1, -1))
         root.addView(goal, FrameLayout.LayoutParams(-2, -2, Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply { topMargin = 48 })
         setContentView(root)
 
@@ -113,6 +116,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onResume()
         GoalWatch.listener = { scorer ->
             goal.text = "🚨  ${goalTitle()}  🚨\n$scorer"
+            GoalFx.play(this, light)
             goal.visibility = android.view.View.VISIBLE
             goal.postDelayed({ goal.visibility = android.view.View.GONE }, 8_000)
         }
