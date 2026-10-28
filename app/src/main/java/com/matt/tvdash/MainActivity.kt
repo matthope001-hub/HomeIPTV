@@ -8,6 +8,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -60,6 +61,10 @@ class MainActivity : AppCompatActivity() {
 
     // A tile being moved: its row, columns in that row, the order before the move, and how to save it
     private class Mover(val a: TileAdapter, val rv: RecyclerView, val cols: Int, val before: List<Tile>, val save: (List<String>) -> Unit)
+    // Everything is sized in design units: 1/540 of the screen height, so the layout fills
+    // a 1080p or 4K screen the same way and nothing ends up off screen
+    private var unit = 1f
+    private fun dp(v: Int) = (v * unit).toInt()
     private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
     private val ui = Handler(Looper.getMainLooper())
@@ -72,44 +77,49 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         Config.load(prefs)
         val url = setupUrl()
-        fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+        unit = resources.displayMetrics.heightPixels / 540f
+        val usable = resources.displayMetrics.widthPixels - 2 * dp(48)   // inside the TV-safe margins
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = rink()
-            setPadding(dp(40), dp(24), dp(40), dp(16))
+            setPadding(dp(48), dp(20), dp(48), dp(12))
+            clipChildren = false
         }
 
         // Header
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-        header.addView(text("TV Dash", 30f, true), LinearLayout.LayoutParams(0, -2, 1f))
-        clock = text("", 26f, false); header.addView(clock)
+        header.addView(text("TV Dash", 22f, true))
+        header.addView(text("📱 Phone setup: $url", 12f, false).apply { setTextColor(Theme.silver) },
+            LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
+        clock = text("", 20f, false); header.addView(clock)
         root.addView(header)
-        root.addView(text("📱 Phone setup: $url", 14f, false).apply { setTextColor(Theme.silver) })
-        root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) })
+        root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(6) })
 
         // Apps row
         root.addView(section("Apps  (long-press to pin)"))
-        appsAdapter = TileAdapter(170, 110, onClick = { launchApp(it.key) }, onLong = { t ->
+        appsAdapter = TileAdapter(112, 84, unit, 11f, onClick = { launchApp(it.key) }, onLong = { t ->
             menu(t.title, listOf(
                 (if (t.pinned) "Unpin" else "Pin") to { pin("apps", t.key); loadApps() },
                 "Move" to { startMove(appsAdapter, appsRow, 1, t.key) { prefs.setOrder("apps", it) } }))
         })
+        appsAdapter.slots = usable / dp(120)
         appsRow = hRow(appsAdapter)
-        root.addView(appsRow, LinearLayout.LayoutParams(-1, dp(130)))
+        root.addView(appsRow, LinearLayout.LayoutParams(-1, dp(92)))
 
         // Categories
         root.addView(section("Free Live TV"))
-        catAdapter = TileAdapter(160, 50, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; showChannels() } },
+        catAdapter = TileAdapter(112, 34, unit, 12f, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; chAdapter.firstPage(); showChannels() } },
             onLong = { t -> startMove(catAdapter, catRow, 1, t.key) { prefs.setOrder("cat", it) } })
         catAdapter.items = listOf(SETUP, FAV, RECENT, "All").ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
+        catAdapter.slots = usable / dp(120)
         catRow = hRow(catAdapter)
-        root.addView(catRow, LinearLayout.LayoutParams(-1, dp(70)))
+        root.addView(catRow, LinearLayout.LayoutParams(-1, dp(42)))
 
         // Channels grid
-        status = text("Loading channels…", 16f, false)
+        status = text("Loading channels…", 12f, false).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
         root.addView(status)
-        chAdapter = TileAdapter(160, 110, onClick = { play(it.key) }, onLong = { t ->
+        chAdapter = TileAdapter((usable / unit / 6).toInt() - 8, 76, unit, 10f, onClick = { play(it.key) }, onLong = { t ->
             val fav = if (t.pinned) "Remove from favourites" else "Add to favourites"
             // Channels can only be reordered in Favourites; other lists follow the playlist
             menu(t.title.substringBefore("\n"), listOfNotNull(
@@ -119,13 +129,19 @@ class MainActivity : AppCompatActivity() {
         grid = RecyclerView(this).apply {
             layoutManager = GridLayoutManager(this@MainActivity, 6)
             adapter = chAdapter
+            overScrollMode = View.OVER_SCROLL_NEVER
+            clipChildren = false; clipToPadding = false
         }
         root.addView(grid, LinearLayout.LayoutParams(-1, 0, 1f))
+        // As many rows of 6 as fit in the space left; the rest go on "More" pages
+        grid.addOnLayoutChangeListener { v, _, top, _, bottom, _, oldTop, _, oldBottom ->
+            if (bottom - top != oldBottom - oldTop) v.post { chAdapter.slots = 6 * maxOf(1, (bottom - top) / dp(84)) }
+        }
 
         // Sports ticker
-        root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(6)).apply { topMargin = dp(8) })
-        ticker = TickerView(this)
-        root.addView(ticker, LinearLayout.LayoutParams(-1, dp(100)).apply { topMargin = dp(6) })
+        root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(4) })
+        ticker = TickerView(this, unit)
+        root.addView(ticker, LinearLayout.LayoutParams(-1, dp(66)).apply { topMargin = dp(4) })
 
         // Avalanche goal alert
         goal = text("", 44f, true).apply {
@@ -159,8 +175,8 @@ class MainActivity : AppCompatActivity() {
             visibility = View.GONE
             background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(Theme.night); setStroke(dp(4), Theme.steel) }
             addView(text("Scan with your phone", 28f, true))
-            addView(ImageView(this@MainActivity).apply { setImageBitmap(qr(url, dp(260))) },
-                LinearLayout.LayoutParams(dp(260), dp(260)).apply { topMargin = dp(16); bottomMargin = dp(16) })
+            addView(ImageView(this@MainActivity).apply { setImageBitmap(qr(url, dp(200))) },
+                LinearLayout.LayoutParams(dp(200), dp(200)).apply { topMargin = dp(16); bottomMargin = dp(16) })
             addView(text(url, 22f, false).apply { setTextColor(Theme.ice) })
             addView(text("Phone must be on the same Wi-Fi · any key closes", 16f, false).apply { setTextColor(Theme.silver) })
         }
@@ -235,8 +251,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun drift() {
-        val d = resources.displayMetrics.density
-        saverBox.animate().translationX(Random.nextInt(-200, 200) * d).translationY(Random.nextInt(-120, 120) * d).setDuration(3_000).start()
+        saverBox.animate().translationX(Random.nextInt(-200, 200) * unit).translationY(Random.nextInt(-100, 100) * unit).setDuration(3_000).start()
     }
 
     // Any key wakes the dashboard; that key press is swallowed so it doesn't also click something
@@ -367,8 +382,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun step(m: Mover, d: Int) {
-        val j = m.a.moveBy(d)
-        if (j >= 0) m.rv.scrollToPosition(j)
+        m.a.moveBy(d)
     }
 
     private fun endMove() { mover?.a?.moving = null; mover = null }
@@ -408,15 +422,17 @@ class MainActivity : AppCompatActivity() {
     private fun hRow(a: TileAdapter) = RecyclerView(this).apply {
         layoutManager = LinearLayoutManager(this@MainActivity, LinearLayoutManager.HORIZONTAL, false)
         adapter = a
+        overScrollMode = View.OVER_SCROLL_NEVER
+        clipChildren = false; clipToPadding = false
     }
 
-    private fun section(s: String) = text(s, 18f, true).apply {
-        setTextColor(Theme.ice); setPadding(0, 24, 0, 4)
+    private fun section(s: String) = text(s, 13f, true).apply {
+        setTextColor(Theme.ice); setPadding(0, dp(6), 0, dp(2))
         setShadowLayer(6f, 0f, 2f, Theme.burgundy)
     }
 
     private fun text(s: String, size: Float, bold: Boolean) = TextView(this).apply {
-        text = s; textSize = size; setTextColor(Color.WHITE)
+        text = s; setTextSize(TypedValue.COMPLEX_UNIT_PX, size * unit); setTextColor(Color.WHITE)
         if (bold) typeface = Typeface.DEFAULT_BOLD
     }
 
