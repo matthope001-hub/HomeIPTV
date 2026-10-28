@@ -21,31 +21,59 @@ class TileAdapter(
     private val onLong: (Tile) -> Unit = {}
 ) : RecyclerView.Adapter<TileAdapter.VH>() {
 
-    var items: List<Tile> = emptyList()
-        set(v) { field = v; notifyDataSetChanged() }
+    private var list: List<Tile> = emptyList()
+    var items: List<Tile>
+        get() = list
+        set(v) { list = v; notifyDataSetChanged() }
+
+    // Key of the tile being moved, or null
+    var moving: String? = null
+        set(v) {
+            val old = field; field = v
+            // Rebind just the affected tile, keeping its view (and focus); the payload stops a cross-fade
+            for (k in listOf(old, v)) list.indexOfFirst { it.key == k }.takeIf { it >= 0 }?.let { notifyItemChanged(it, "lift") }
+        }
+
+    /** Slides the moving tile by [d] places; returns its new position */
+    fun moveBy(d: Int): Int {
+        val i = list.indexOfFirst { it.key == moving }
+        if (i < 0) return -1
+        val j = (i + d).coerceIn(0, list.size - 1)
+        if (j != i) {
+            list = list.toMutableList().apply { add(j, removeAt(i)) }
+            notifyItemMoved(i, j)
+        }
+        return j
+    }
 
     class VH(val root: LinearLayout, val img: ImageView, val label: TextView) : RecyclerView.ViewHolder(root)
+
+    private fun bg(v: View, focused: Boolean, lifted: Boolean): GradientDrawable {
+        val d = v.resources.displayMetrics.density
+        return GradientDrawable().apply {
+            cornerRadius = 14 * d
+            when {
+                lifted -> { setColor(Theme.steel); setStroke((5 * d).toInt(), Color.WHITE) }
+                focused -> { setColor(Theme.tileFocus); setStroke((3 * d).toInt(), Color.WHITE) }
+                else -> { setColor(Theme.tile); setStroke((3 * d).toInt(), Color.argb(90, 35, 97, 146)) }
+            }
+        }
+    }
 
     override fun onCreateViewHolder(p: ViewGroup, t: Int): VH {
         val d = p.resources.displayMetrics.density
         fun dp(v: Int) = (v * d).toInt()
-        val bg = { focused: Boolean ->
-            GradientDrawable().apply {
-                cornerRadius = dp(14).toFloat()
-                setColor(if (focused) Theme.tileFocus else Theme.tile)
-                setStroke(dp(3), if (focused) Color.WHITE else Color.argb(90, 35, 97, 146))
-            }
-        }
         val root = LinearLayout(p.context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             layoutParams = ViewGroup.MarginLayoutParams(dp(wDp), dp(hDp)).apply { setMargins(dp(8), dp(8), dp(8), dp(8)) }
             setPadding(dp(10), dp(10), dp(10), dp(10))
             isFocusable = true
-            background = bg(false)
             setOnFocusChangeListener { v, f ->
-                v.background = bg(f)
-                v.animate().scaleX(if (f) 1.08f else 1f).scaleY(if (f) 1.08f else 1f).setDuration(120).start()
+                val lifted = v.tag == moving
+                v.background = bg(v, f, lifted)
+                val s = if (lifted) 1.15f else if (f) 1.08f else 1f
+                v.animate().scaleX(s).scaleY(s).setDuration(120).start()
             }
         }
         val img = ImageView(p.context).apply {
@@ -65,8 +93,13 @@ class TileAdapter(
     }
 
     override fun onBindViewHolder(h: VH, i: Int) {
-        val t = items[i]
-        h.label.text = if (t.pinned) "★ ${t.title}" else t.title
+        val t = list[i]
+        val lifted = t.key == moving
+        h.root.tag = t.key
+        h.root.background = bg(h.root, h.root.hasFocus(), lifted)
+        val s = if (lifted) 1.15f else if (h.root.hasFocus()) 1.08f else 1f
+        h.root.scaleX = s; h.root.scaleY = s
+        h.label.text = (if (lifted) "⇄ " else "") + (if (t.pinned) "★ ${t.title}" else t.title)
         h.img.dispose()   // cancel any image load still pending from a recycled tile
         when {
             t.icon != null -> h.img.setImageDrawable(t.icon)
@@ -77,5 +110,5 @@ class TileAdapter(
         h.root.setOnLongClickListener { onLong(t); true }
     }
 
-    override fun getItemCount() = items.size
+    override fun getItemCount() = list.size
 }

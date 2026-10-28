@@ -164,6 +164,13 @@ object StreamCheck {
     }
 }
 
+/** Puts items in a saved order; anything not in it keeps its place after them */
+fun <T> List<T>.ordered(order: List<String>, key: (T) -> String): List<T> {
+    if (order.isEmpty()) return this
+    val pos = order.withIndex().associate { it.value to it.index }
+    return sortedBy { pos[key(it)] ?: Int.MAX_VALUE }
+}
+
 class Prefs(ctx: Context) {
     private val sp = ctx.getSharedPreferences("tvdash", Context.MODE_PRIVATE)
     fun get(set: String): Set<String> = sp.getStringSet(set, emptySet()) ?: emptySet()
@@ -179,6 +186,10 @@ class Prefs(ctx: Context) {
     fun str(key: String, def: String): String = sp.getString(key, def) ?: def
     fun saveSettings(playlists: List<String>, epg: String, team: String) =
         sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team).apply()
+
+    // Tile order you set with Move, per row
+    fun order(row: String): List<String> = str("order_$row", "").split('\n').filter { it.isNotEmpty() }
+    fun setOrder(row: String, keys: List<String>) = sp.edit().putString("order_$row", keys.joinToString("\n")).apply()
 
     // Last 10 channels watched, newest first
     fun recent(): List<String> = sp.getString("recent", "").orEmpty().split('\n').filter { it.isNotEmpty() }

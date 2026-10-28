@@ -16,6 +16,7 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -52,6 +53,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saverAvs: TextView
     private var lastScores: List<TickerItem>? = null
     private lateinit var setup: LinearLayout
+    private lateinit var appsRow: RecyclerView
+    private lateinit var catRow: RecyclerView
+    private lateinit var grid: RecyclerView
+    private var mover: Mover? = null
+
+    // A tile being moved: its row, columns in that row, the order before the move, and how to save it
+    private class Mover(val a: TileAdapter, val rv: RecyclerView, val cols: Int, val before: List<Tile>, val save: (List<String>) -> Unit)
     private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
     private val ui = Handler(Looper.getMainLooper())
@@ -82,20 +90,33 @@ class MainActivity : AppCompatActivity() {
 
         // Apps row
         root.addView(section("Apps  (long-press to pin)"))
-        appsAdapter = TileAdapter(170, 110, onClick = { launchApp(it.key) }, onLong = { pin("apps", it.key); loadApps() })
-        root.addView(hRow(appsAdapter), LinearLayout.LayoutParams(-1, dp(130)))
+        appsAdapter = TileAdapter(170, 110, onClick = { launchApp(it.key) }, onLong = { t ->
+            menu(t.title, listOf(
+                (if (t.pinned) "Unpin" else "Pin") to { pin("apps", t.key); loadApps() },
+                "Move" to { startMove(appsAdapter, appsRow, 1, t.key) { prefs.setOrder("apps", it) } }))
+        })
+        appsRow = hRow(appsAdapter)
+        root.addView(appsRow, LinearLayout.LayoutParams(-1, dp(130)))
 
         // Categories
         root.addView(section("Free Live TV"))
-        catAdapter = TileAdapter(160, 50, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; showChannels() } })
-        catAdapter.items = listOf(SETUP, FAV, RECENT, "All").map { Tile(it, it) }
-        root.addView(hRow(catAdapter), LinearLayout.LayoutParams(-1, dp(70)))
+        catAdapter = TileAdapter(160, 50, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; showChannels() } },
+            onLong = { t -> startMove(catAdapter, catRow, 1, t.key) { prefs.setOrder("cat", it) } })
+        catAdapter.items = listOf(SETUP, FAV, RECENT, "All").ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
+        catRow = hRow(catAdapter)
+        root.addView(catRow, LinearLayout.LayoutParams(-1, dp(70)))
 
         // Channels grid
         status = text("Loading channels…", 16f, false)
         root.addView(status)
-        chAdapter = TileAdapter(160, 110, onClick = { play(it.key) }, onLong = { pin("ch", it.key); showChannels() })
-        val grid = RecyclerView(this).apply {
+        chAdapter = TileAdapter(160, 110, onClick = { play(it.key) }, onLong = { t ->
+            val fav = if (t.pinned) "Remove from favourites" else "Add to favourites"
+            // Channels can only be reordered in Favourites; other lists follow the playlist
+            menu(t.title.substringBefore("\n"), listOfNotNull(
+                fav to { pin("ch", t.key); showChannels() },
+                if (category == FAV) "Move" to { startMove(chAdapter, grid, 6, t.key) { prefs.setOrder("ch", it); showChannels() } } else null))
+        })
+        grid = RecyclerView(this).apply {
             layoutManager = GridLayoutManager(this@MainActivity, 6)
             adapter = chAdapter
         }
@@ -221,6 +242,20 @@ class MainActivity : AppCompatActivity() {
     // Any key wakes the dashboard; that key press is swallowed so it doesn't also click something
     override fun dispatchKeyEvent(e: KeyEvent): Boolean {
         resetIdle()
+        mover?.let { m ->
+            if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> step(m, -1)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> step(m, 1)
+                KeyEvent.KEYCODE_DPAD_UP -> if (m.cols > 1) step(m, -m.cols)
+                KeyEvent.KEYCODE_DPAD_DOWN -> if (m.cols > 1) step(m, m.cols)
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    val keys = m.a.items.map { it.key }
+                    endMove(); m.save(keys); swallowUp = true; toast("Moved")
+                }
+                KeyEvent.KEYCODE_BACK -> { endMove(); m.a.items = m.before; swallowUp = true }
+            }
+            return true   // the remote only moves the tile until it's dropped
+        }
         if ((saver.visibility == View.VISIBLE || setup.visibility == View.VISIBLE) && e.action == KeyEvent.ACTION_DOWN) {
             saver.visibility = View.GONE; setup.visibility = View.GONE; swallowUp = true; return true
         }
@@ -242,6 +277,7 @@ class MainActivity : AppCompatActivity() {
             }
             .distinctBy { it.key }
             .sortedWith(compareBy<Tile>({ !it.pinned }, { it.title.lowercase() }))
+            .ordered(prefs.order("apps")) { it.key }
         appsAdapter.items = tiles
     }
 
@@ -282,14 +318,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildCategories() {
         val groups = allChannels.map { it.group }.distinct().sorted()
-        catAdapter.items = (listOf(SETUP, FAV, RECENT, "All") + groups).map { Tile(it, it) }
+        catAdapter.items = (listOf(SETUP, FAV, RECENT, "All") + groups).ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
         if (prefs.get("ch").isEmpty()) category = "All"
     }
 
     private fun showChannels() {
         val favs = prefs.get("ch")
         val all = when (category) {
-            FAV -> allChannels.filter { it.url in favs }
+            FAV -> allChannels.filter { it.url in favs }.ordered(prefs.order("ch")) { it.url }
             RECENT -> prefs.recent().mapNotNull { u -> allChannels.firstOrNull { it.url == u } }
             "All" -> allChannels
             else -> allChannels.filter { it.group == category }
@@ -298,7 +334,7 @@ class MainActivity : AppCompatActivity() {
         val hidden = all.size - list.size
         Session.channels = list
         status.text = "$category · ${list.size} channels" +
-            (if (hidden > 0) " · $hidden offline hidden" else "") + "  (long-press a channel to favourite)"
+            (if (hidden > 0) " · $hidden offline hidden" else "") + "  (long-press a channel for options)"
         chAdapter.items = list.map {
             val now = Epg.nowNext(it.tvgId).first
             Tile(it.url, if (now != null) "${it.name}\n${now.title}" else it.name, iconUrl = it.logo, pinned = it.url in favs)
@@ -321,6 +357,26 @@ class MainActivity : AppCompatActivity() {
         saverDate.text = SimpleDateFormat("EEEE, MMMM d", Locale.getDefault()).format(now)
         if (saver.visibility == View.VISIBLE) drift()
         ui.postDelayed({ tick() }, 30_000)
+    }
+
+    // ---------- Move tiles ----------
+    private fun startMove(a: TileAdapter, rv: RecyclerView, cols: Int, key: String, save: (List<String>) -> Unit) {
+        mover = Mover(a, rv, cols, a.items, save)
+        a.moving = key
+        toast(if (cols > 1) "Arrows to move · OK to drop · Back to cancel" else "◀ ▶ to move · OK to drop · Back to cancel")
+    }
+
+    private fun step(m: Mover, d: Int) {
+        val j = m.a.moveBy(d)
+        if (j >= 0) m.rv.scrollToPosition(j)
+    }
+
+    private fun endMove() { mover?.a?.moving = null; mover = null }
+
+    private fun menu(title: String, actions: List<Pair<String, () -> Unit>>) {
+        AlertDialog.Builder(this).setTitle(title)
+            .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
+            .show()
     }
 
     private fun showSetup() { setup.visibility = View.VISIBLE }

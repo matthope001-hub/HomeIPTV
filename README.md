@@ -2,6 +2,7 @@
 
 An Android TV dashboard for free, legal IPTV playlists, themed in Colorado Avalanche colours (colours only, no logos).
 
+- Long-press a tile to pin, favourite or Move it: ◀ ▶ (and ▲ ▼ in the grid) slide it, OK drops, Back cancels. Works for apps, categories and Favourites channels
 - Apps row with pinning, channel categories, favourites and recently watched
 - TV guide (XMLTV): now and next on tiles and in the player
 - Offline streams hidden automatically
