@@ -6,3 +6,6 @@ local.properties
 *.iml
 .DS_Store
 captures/
+
+# Your own goal horn stays on your computer (not published)
+app/src/main/res/raw/goal_horn.*
