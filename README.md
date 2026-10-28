@@ -8,7 +8,7 @@ An Android TV dashboard for free, legal IPTV playlists, themed in Colorado Avala
 - Offline streams hidden automatically
 - Sports score ticker (ESPN public feeds) with Avalanche game mode
 - Goal alerts with scorer and assists from the NHL feed (checked every 10 s during a live game), on the dashboard and in the player
-- Goal horn and flashing red goal light with every goal alert. The horn is generated in code; to use your own sound, add `app/src/main/res/raw/goal_horn.mp3` and rebuild. Turn the horn off on the phone setup page
+- Goal horn and flashing red goal light with every goal alert. Plays the Avalanche horn in `app/src/main/res/raw/goal_horn.mp3` (first 10 seconds); without that file it falls back to a horn generated in code. Turn the horn off on the phone setup page
 - Phone setup page: open "📱 Phone setup" on the TV, scan the QR code, and change playlists, TV guide link and team from your phone (same Wi-Fi, port 8080)
 - Player: ▲/▼ change channel, Back jumps to the last channel (Back again to exit)
 - Screensaver after 5 minutes idle

@@ -12,12 +12,8 @@ You build the app on your computer once, then send it to the TV over Wi-Fi (opti
 5. When it finishes, click **locate** in the pop-up. The file is:
    `app/build/outputs/apk/debug/app-debug.apk`
 
-### Optional: your own goal horn
-1. Download your horn sound (for example a ringtone from Zedge) on your computer as an `.mp3`, `.ogg` or `.wav`.
-2. Rename it `goal_horn.mp3` (keep its real extension) and put it in `app/src/main/res/raw/` (create the `raw` folder if it isn't there).
-3. Build again (step 1). The app plays it instead of the built-in horn. Only the first 10 seconds play, fading out at the end.
-
-The file name must be lowercase with no spaces. It is ignored by git, so it stays on your computer and isn't published to GitHub.
+### Goal horn
+The Avalanche goal horn is included at `app/src/main/res/raw/goal_horn.mp3` and is built into the app. To use a different sound, replace that file (keep the name lowercase, `.mp3`, `.ogg` or `.wav`) and build again. Only the first 10 seconds play, fading out at the end. Delete the file to go back to the horn generated in code.
 
 ## 2. Get the TV ready (once)
 
