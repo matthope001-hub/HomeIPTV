@@ -5,17 +5,19 @@ import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.Gravity
+import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import coil.load
 
 /**
- * Score ticker that fits the screen: as many game cards as fit, changing page every 8 seconds.
+ * Score ticker: a strip of game cards that scrolls sideways forever.
+ * Your team's game (put first by Ticker.load) stays fixed at the left while the rest scroll past.
  * Each card: status line (start time, ● LIVE + period, or FINAL), then away and home rows with
  * logo, abbreviation and record or score. The loser is dimmed on a final.
- * Your team's game (put first by Ticker.load) stays on every page.
  * Sizes are in "design units" (1/540 of the screen height), so it fits any TV resolution.
  */
 class TickerView(ctx: Context, private val unit: Float) : LinearLayout(ctx) {
@@ -26,81 +28,69 @@ class TickerView(ctx: Context, private val unit: Float) : LinearLayout(ctx) {
 
     private fun dp(v: Int) = (v * unit).toInt()
 
-    private var items: List<TickerItem> = emptyList()
-    private var pages: List<List<TickerItem>> = emptyList()
-    private var page = 0
-
-    private val rotate = object : Runnable {
-        override fun run() {
-            if (pages.size > 1) {
-                page = (page + 1) % pages.size
-                animate().alpha(0f).setDuration(250).withEndAction { show(); animate().alpha(1f).setDuration(250).start() }.start()
-            }
-            postDelayed(this, 8_000)
-        }
+    private val pinned = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private val track = LinearLayout(ctx).apply { orientation = HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+    private val scroller = HorizontalScrollView(ctx).apply {
+        isHorizontalScrollBarEnabled = false
+        isFocusable = false
+        overScrollMode = OVER_SCROLL_NEVER
+        addView(track)
     }
+
+    private var half = 0
+    private var running = false
+    private val speed = 0.75f * unit      // pixels per frame
+    private var acc = 0f
 
     init {
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         isFocusable = false
         descendantFocusability = FOCUS_BLOCK_DESCENDANTS
+        addView(pinned, LayoutParams(-2, -1))
+        addView(scroller, LayoutParams(0, -1, 1f))
     }
 
-    fun setItems(list: List<TickerItem>) {
-        items = list
-        if (width > 0) paginate() else post { paginate() }
-    }
-
-    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
-        super.onSizeChanged(w, h, ow, oh)
-        if (w != ow) post { paginate() }
-    }
-
-    override fun onDetachedFromWindow() { removeCallbacks(rotate); super.onDetachedFromWindow() }
-
-    // Width a card takes, margins included
-    private fun cardW(i: TickerItem) = dp(if (i is TickerItem.League) 52 else 150) + dp(8)
-
-    private fun paginate() {
-        if (width == 0) return
-        val pinned = if (items.size >= 2 && (items[1] as? TickerItem.Game)?.isFav == true) items.take(2) else emptyList()
-        val room = width - pinned.sumOf { cardW(it) }
-        val out = mutableListOf<List<TickerItem>>()
-        var cur = mutableListOf<TickerItem>()
-        var used = 0
-        var league: TickerItem.League? = null
-        for (item in items.drop(pinned.size)) {
-            if (item is TickerItem.League) league = item
-            val w = cardW(item)
-            if (cur.isNotEmpty() && used + w > room) {
-                // Never end a page on a league label; start each page with its league
-                val carry = if (cur.last() is TickerItem.League) cur.removeAt(cur.lastIndex) else null
-                if (cur.isNotEmpty()) out += pinned + cur
-                cur = mutableListOf(); used = 0
-                val head = carry ?: if (item is TickerItem.Game) league else null
-                if (head != null && head !== item) { cur += head; used += cardW(head) }
-            }
-            cur += item; used += w
-        }
-        if (cur.isNotEmpty()) out += pinned + cur
-        if (out.isEmpty() && pinned.isNotEmpty()) out += pinned
-        pages = out
-        page = page.coerceIn(0, maxOf(0, pages.size - 1))
-        show()
-        removeCallbacks(rotate); postDelayed(rotate, 8_000)
-    }
-
-    private fun show() {
-        removeAllViews()
-        val p = pages.getOrNull(page)
-        if (p == null) {
-            addView(label("No games today", Color.WHITE, 14f, false).apply { setPadding(dp(8), 0, dp(8), 0) })
+    fun setItems(items: List<TickerItem>) {
+        pinned.removeAllViews(); track.removeAllViews()
+        val fav = items.size >= 2 && (items[1] as? TickerItem.Game)?.isFav == true
+        if (fav) items.take(2).forEach { pinned.addView(card(it)) }
+        val rest = items.drop(if (fav) 2 else 0)
+        if (rest.isEmpty()) {
+            if (!fav) track.addView(label("No games today", Color.WHITE, 14f, false).apply { setPadding(dp(8), 0, dp(8), 0) })
+            half = 0
             return
         }
-        p.forEach { addView(if (it is TickerItem.League) leagueCard(it) else gameCard(it as TickerItem.Game)) }
-        if (pages.size > 1) addView(label("${page + 1}/${pages.size}", dim, 10f, false).apply { setPadding(dp(4), 0, 0, 0) })
+        // Two copies back to back so the loop is seamless
+        repeat(2) { rest.forEach { track.addView(card(it)) } }
+        track.post { half = track.width / 2 }
+        start()
     }
+
+    private fun card(i: TickerItem) = if (i is TickerItem.League) leagueCard(i) else gameCard(i as TickerItem.Game)
+
+    // ---------- Endless scroll ----------
+    private val frame = object : Choreographer.FrameCallback {
+        override fun doFrame(t: Long) {
+            if (!running) return
+            if (half > scroller.width) {
+                acc += speed
+                val step = acc.toInt(); acc -= step
+                var x = scroller.scrollX + step
+                if (x >= half) x -= half
+                scroller.scrollTo(x, 0)
+            }
+            Choreographer.getInstance().postFrameCallback(this)
+        }
+    }
+
+    private fun start() {
+        if (running) return
+        running = true
+        Choreographer.getInstance().postFrameCallback(frame)
+    }
+
+    override fun onDetachedFromWindow() { running = false; super.onDetachedFromWindow() }
 
     // ---------- Cards ----------
     private fun leagueCard(l: TickerItem.League) = label(l.name, Color.WHITE, 15f, true).apply {

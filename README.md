@@ -13,7 +13,7 @@ An Android TV dashboard for free, legal IPTV playlists, themed in Colorado Avala
 - Screensaver after 5 minutes idle
 
 ## Screen fit
-Built for a 55" 4K TV (RCA RTGU5570). Everything is sized from the screen's real height, inside TV-safe margins, so the whole dashboard is on screen at 1080p or 4K with no scrolling. Rows show as many tiles as fit; extra tiles go on pages behind a "More ▸" tile, and the score ticker changes page every 8 seconds.
+Built for a 55" 4K TV (RCA RTGU5570). Everything is sized from the screen's real height, inside TV-safe margins, so the whole dashboard is on screen at 1080p or 4K with no scrolling. Rows show as many tiles as fit; extra tiles go on pages behind a "More ▸" tile. The score ticker is the one thing that moves: it scrolls sideways, with your team's game fixed at the left.
 
 ## Install on the TV
 Step-by-step: **[INSTALL.md](INSTALL.md)** (build the APK, then send it to the TV over Wi-Fi with ADB, a USB stick, or Android Studio).
