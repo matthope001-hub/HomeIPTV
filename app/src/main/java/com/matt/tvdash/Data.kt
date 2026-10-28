@@ -1,0 +1,163 @@
+package com.matt.tvdash
+
+import android.content.Context
+import android.graphics.drawable.Drawable
+import android.util.Xml
+import org.xmlpull.v1.XmlPullParser
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
+import java.text.SimpleDateFormat
+import java.util.Collections
+import java.util.Locale
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+
+// ---- Change or add free, legal playlists here ----
+const val PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/ca.m3u"
+// XMLTV guide (.xml or .xml.gz). Leave blank to use the playlist's own x-tvg-url header.
+const val EPG_URL = ""
+
+// Network read with timeouts so a dead host can't hang a thread forever
+fun openStream(url: String): InputStream = URL(url).openConnection().run {
+    connectTimeout = 10_000; readTimeout = 30_000
+    if (url.endsWith(".gz")) GZIPInputStream(getInputStream()) else getInputStream()
+}
+
+fun httpGet(url: String): String = openStream(url).bufferedReader().use { it.readText() }
+
+data class Channel(val name: String, val group: String, val logo: String?, val url: String, val tvgId: String?)
+
+data class Tile(
+    val key: String,
+    val title: String,
+    val icon: Drawable? = null,
+    val iconUrl: String? = null,
+    val pinned: Boolean = false
+)
+
+object Session {
+    var channels: List<Channel> = emptyList()   // list currently shown, used by the player
+    var dead: Set<String> = emptySet()          // stream URLs that didn't answer
+}
+
+object M3U {
+    var epgUrl: String? = null
+
+    fun load(url: String = PLAYLIST_URL): List<Channel> {
+        val text = httpGet(url)
+        val out = mutableListOf<Channel>()
+        var info: String? = null
+        for (raw in text.lineSequence()) {
+            val line = raw.trim()
+            when {
+                line.startsWith("#EXTM3U") ->
+                    epgUrl = (attr(line, "x-tvg-url") ?: attr(line, "url-tvg"))?.split(",")?.first()?.trim()?.ifBlank { null }
+                line.startsWith("#EXTINF") -> info = line
+                line.isNotEmpty() && !line.startsWith("#") && info != null -> {
+                    val name = info!!.substringAfterLast(",").trim()
+                    val group = attr(info!!, "group-title")?.split(";")?.first()?.ifBlank { null } ?: "Other"
+                    out += Channel(name, group, attr(info!!, "tvg-logo")?.ifBlank { null }, line, attr(info!!, "tvg-id")?.ifBlank { null })
+                    info = null
+                }
+            }
+        }
+        return out
+    }
+
+    private fun attr(s: String, key: String): String? =
+        Regex("$key=\"([^\"]*)\"").find(s)?.groupValues?.get(1)
+}
+
+// ---------- TV guide (XMLTV) ----------
+data class Prog(val start: Long, val stop: Long, val title: String)
+
+object Epg {
+    @Volatile var guide: Map<String, List<Prog>> = emptyMap()
+    private val fmt = SimpleDateFormat("yyyyMMddHHmmss Z", Locale.US)
+
+    /** Streams the file and keeps only our channels, from 1 hour ago to 12 hours ahead */
+    fun load(url: String, ids: Set<String>) {
+        val now = System.currentTimeMillis()
+        val from = now - 3_600_000; val to = now + 12 * 3_600_000
+        val out = HashMap<String, MutableList<Prog>>()
+        openStream(url).use { input ->
+            val p = Xml.newPullParser()
+            p.setInput(input, null)
+            var ch: String? = null; var start = 0L; var stop = 0L; var title: String? = null
+            while (p.next() != XmlPullParser.END_DOCUMENT) {
+                if (p.eventType == XmlPullParser.START_TAG) {
+                    when (p.name) {
+                        "programme" -> {
+                            ch = p.getAttributeValue(null, "channel")?.takeIf { it in ids }
+                            start = time(p.getAttributeValue(null, "start"))
+                            stop = time(p.getAttributeValue(null, "stop"))
+                            title = null
+                        }
+                        "title" -> if (ch != null && title == null) title = p.nextText()
+                    }
+                } else if (p.eventType == XmlPullParser.END_TAG && p.name == "programme") {
+                    val c = ch; val t = title
+                    if (c != null && t != null && stop > from && start < to) out.getOrPut(c) { mutableListOf() } += Prog(start, stop, t)
+                    ch = null
+                }
+            }
+        }
+        guide = out.mapValues { e -> e.value.sortedBy { it.start } }
+    }
+
+    private fun time(s: String?) = try { fmt.parse(s!!.trim())!!.time } catch (_: Exception) { 0L }
+
+    /** What's on now and what's next for a channel */
+    fun nowNext(id: String?): Pair<Prog?, Prog?> {
+        val list = guide[id ?: return null to null] ?: return null to null
+        val now = System.currentTimeMillis()
+        val i = list.indexOfFirst { now < it.stop }
+        if (i < 0) return null to null
+        val cur = list[i].takeIf { it.start <= now }
+        return cur to list.getOrNull(if (cur != null) i + 1 else i)
+    }
+}
+
+// ---------- Dead stream check ----------
+object StreamCheck {
+    /** Returns the URLs that don't answer. Runs 8 checks at a time. */
+    fun run(list: List<Channel>): Set<String> {
+        val dead = Collections.synchronizedSet(HashSet<String>())
+        val pool = Executors.newFixedThreadPool(8)
+        list.forEach { ch -> pool.execute { if (!alive(ch.url)) dead += ch.url } }
+        pool.shutdown()
+        pool.awaitTermination(10, TimeUnit.MINUTES)
+        return dead.toSet()
+    }
+
+    private fun alive(url: String): Boolean {
+        if (!url.startsWith("http")) return true   // can't test rtmp etc. this way, leave them shown
+        return try {
+            (URL(url).openConnection() as HttpURLConnection).run {
+                connectTimeout = 5_000; readTimeout = 5_000; instanceFollowRedirects = true
+                val ok = responseCode in 200..399
+                disconnect(); ok
+            }
+        } catch (_: Exception) { false }
+    }
+}
+
+class Prefs(ctx: Context) {
+    private val sp = ctx.getSharedPreferences("tvdash", Context.MODE_PRIVATE)
+    fun get(set: String): Set<String> = sp.getStringSet(set, emptySet()) ?: emptySet()
+    fun toggle(set: String, key: String): Boolean {
+        val s = get(set).toMutableSet()
+        val added = if (key in s) { s.remove(key); false } else { s.add(key); true }
+        sp.edit().putStringSet(set, s).apply()
+        return added
+    }
+
+    // Last 10 channels watched, newest first
+    fun recent(): List<String> = sp.getString("recent", "").orEmpty().split('\n').filter { it.isNotEmpty() }
+    fun pushRecent(url: String) {
+        val list = (listOf(url) + recent().filter { it != url }).take(10)
+        sp.edit().putString("recent", list.joinToString("\n")).apply()
+    }
+}

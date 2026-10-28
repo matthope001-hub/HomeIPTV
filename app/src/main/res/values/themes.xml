@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.TVDash" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowBackground">#0A1220</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+</resources>
