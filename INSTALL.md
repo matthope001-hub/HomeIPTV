@@ -15,7 +15,7 @@ You build the app on your computer once, then send it to the TV over Wi-Fi (opti
 ### Optional: your own goal horn
 1. Download your horn sound (for example a ringtone from Zedge) on your computer as an `.mp3`, `.ogg` or `.wav`.
 2. Rename it `goal_horn.mp3` (keep its real extension) and put it in `app/src/main/res/raw/` (create the `raw` folder if it isn't there).
-3. Build again (step 1). The app plays it instead of the built-in horn.
+3. Build again (step 1). The app plays it instead of the built-in horn. Only the first 10 seconds play, fading out at the end.
 
 The file name must be lowercase with no spaces. It is ignored by git, so it stays on your computer and isn't published to GitHub.
 

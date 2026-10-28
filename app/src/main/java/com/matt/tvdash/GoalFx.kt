@@ -5,6 +5,8 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import kotlin.concurrent.thread
 import kotlin.math.PI
@@ -14,7 +16,7 @@ import kotlin.math.sin
 /**
  * Goal celebration: a horn and a flashing red goal light.
  * The horn is generated in code (no recording needed). To use your own sound instead,
- * add it as app/src/main/res/raw/goal_horn.mp3 (or .ogg/.wav).
+ * add it as app/src/main/res/raw/goal_horn.mp3 (or .ogg/.wav). Only the first 10 seconds play.
  */
 object GoalFx {
 
@@ -39,7 +41,15 @@ object GoalFx {
     private fun horn(ctx: Context) {
         val id = ctx.resources.getIdentifier("goal_horn", "raw", ctx.packageName)
         if (id != 0) {
-            MediaPlayer.create(ctx, id)?.apply { setOnCompletionListener { it.release() }; start() }
+            val mp = MediaPlayer.create(ctx, id) ?: return
+            var done = false
+            fun finish() { if (!done) { done = true; mp.release() } }
+            mp.setOnCompletionListener { finish() }
+            mp.start()
+            // Long recordings stop after 10 seconds with a 1.5-second fade
+            val ui = Handler(Looper.getMainLooper())
+            for (step in 1..15) ui.postDelayed({ if (!done) (1f - step / 15f).let { mp.setVolume(it, it) } }, 8_500L + step * 100)
+            ui.postDelayed({ finish() }, 10_100)
             return
         }
         thread { try { synthHorn() } catch (_: Exception) { } }
