@@ -5,6 +5,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -35,6 +37,8 @@ import kotlin.random.Random
 private const val FAV = "★ Favourites"
 private const val RECENT = "⟲ Recent"
 private const val SETUP = "📱 Phone setup"
+private const val GOALS = "🚨 Goals"
+private const val GOAL = "goal:"   // key prefix for goal tiles in the grid
 private const val IDLE_MS = 5 * 60_000L   // screensaver after 5 minutes without a key press
 
 class MainActivity : AppCompatActivity() {
@@ -55,6 +59,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var saverAvs: TextView
     private var lastScores: List<TickerItem>? = null
     private lateinit var setup: LinearLayout
+    private lateinit var panelTitle: TextView
+    private lateinit var panelQr: ImageView
+    private lateinit var panelUrl: TextView
+    private lateinit var panelHint: TextView
     private lateinit var appsRow: RecyclerView
     private lateinit var catRow: RecyclerView
     private lateinit var grid: RecyclerView
@@ -120,13 +128,13 @@ class MainActivity : AppCompatActivity() {
         // Channels grid
         status = text("Loading channels…", 12f, false).apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
         root.addView(status)
-        chAdapter = TileAdapter((usable / unit / 6).toInt() - 8, 76, unit, 10f, onClick = { play(it.key) }, onLong = { t ->
+        chAdapter = TileAdapter((usable / unit / 6).toInt() - 8, 76, unit, 10f, onClick = { if (it.key.startsWith(GOAL)) playClip(it.key.removePrefix(GOAL)) else play(it.key) }, onLong = { t -> if (!t.key.startsWith(GOAL)) {
             val fav = if (t.pinned) "Remove from favourites" else "Add to favourites"
             // Channels can only be reordered in Favourites; other lists follow the playlist
             menu(t.title.substringBefore("\n"), listOfNotNull(
                 fav to { pin("ch", t.key); showChannels() },
                 if (category == FAV) "Move" to { startMove(chAdapter, grid, 6, t.key) { prefs.setOrder("ch", it); showChannels() } } else null))
-        })
+        } })
         grid = RecyclerView(this).apply {
             layoutManager = GridLayoutManager(this@MainActivity, 6)
             adapter = chAdapter
@@ -175,11 +183,13 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(32), dp(32), dp(32), dp(32))
             visibility = View.GONE
             background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(Theme.night); setStroke(dp(4), Theme.steel) }
-            addView(text("Scan with your phone", 28f, true))
-            addView(ImageView(this@MainActivity).apply { setImageBitmap(qr(url, dp(200))) },
-                LinearLayout.LayoutParams(dp(200), dp(200)).apply { topMargin = dp(16); bottomMargin = dp(16) })
-            addView(text(url, 22f, false).apply { setTextColor(Theme.ice) })
-            addView(text("Phone must be on the same Wi-Fi · any key closes", 16f, false).apply { setTextColor(Theme.silver) })
+            panelTitle = text("", 28f, true); addView(panelTitle)
+            panelQr = ImageView(this@MainActivity)
+            addView(panelQr, LinearLayout.LayoutParams(dp(200), dp(200)).apply { topMargin = dp(16); bottomMargin = dp(16) })
+            panelUrl = text("", 14f, false).apply { setTextColor(Theme.ice); gravity = Gravity.CENTER; maxWidth = dp(420) }
+            addView(panelUrl)
+            panelHint = text("", 14f, false).apply { setTextColor(Theme.silver) }
+            addView(panelHint)
         }
 
         setContentView(FrameLayout(this).apply {
@@ -193,7 +203,13 @@ class MainActivity : AppCompatActivity() {
         tick()
         loadChannels()
         loadScores()
-        GoalWatch.start()
+        // Keep watching for goals in the background so the edge glow can show over other apps
+        try {
+            val svc = Intent(this, WatchService::class.java)
+            if (Build.VERSION.SDK_INT >= 26) startForegroundService(svc) else startService(svc)
+        } catch (_: Exception) { }
+        GoalWatch.start(this)
+        GoalWatch.onGoalsChanged = { if (allChannels.isNotEmpty()) buildCategories(); if (category == GOALS) showChannels() }
         SetupServer.onSaved = { reload() }
         SetupServer.start(prefs)
     }
@@ -204,13 +220,14 @@ class MainActivity : AppCompatActivity() {
         if (allChannels.isNotEmpty()) showChannels()   // refresh Recent and guide titles
         resetIdle()
         GoalWatch.listener = { showGoal(it) }
+        EdgeGlow.check(this)
     }
 
     override fun onPause() { super.onPause(); ui.removeCallbacks(idle); GoalWatch.listener = null }
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
-        GoalWatch.stop(); SetupServer.stop(); SetupServer.onSaved = null
+        GoalWatch.onGoalsChanged = null; SetupServer.stop(); SetupServer.onSaved = null
         super.onDestroy()
     }
 
@@ -337,11 +354,22 @@ class MainActivity : AppCompatActivity() {
 
     private fun buildCategories() {
         val groups = allChannels.map { it.group }.distinct().sorted()
-        catAdapter.items = (listOf(SETUP, FAV, RECENT, "All") + groups).ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
-        if (prefs.get("ch").isEmpty()) category = "All"
+        // "🚨 Goals" comes first whenever your team has goals today
+        val goals = if (GoalWatch.goals.isNotEmpty()) listOf(GOALS) else emptyList()
+        catAdapter.items = (goals + (listOf(SETUP, FAV, RECENT, "All") + groups).ordered(prefs.order("cat")) { it })
+            .map { Tile(it, if (it == GOALS) "🚨 ${Config.team} goals" else it) }
+        if (category == FAV && prefs.get("ch").isEmpty()) category = "All"
     }
 
     private fun showChannels() {
+        if (category == GOALS) {
+            val goals = GoalWatch.goals
+            status.text = "${Config.team} goals · ${goals.size}  (press OK to watch the clip)"
+            chAdapter.items = goals.map {
+                Tile(GOAL + it.key, "${it.scorer}\n${it.detail} · ${if (it.clip != null) "▶ Clip" else "clip soon"}", iconUrl = it.headshot)
+            }
+            return
+        }
         val favs = prefs.get("ch")
         val all = when (category) {
             FAV -> allChannels.filter { it.url in favs }.ordered(prefs.order("ch")) { it.url }
@@ -397,7 +425,23 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showSetup() { setup.visibility = View.VISIBLE }
+    private fun showSetup() = showPanel("Scan with your phone", setupUrl(), "Phone must be on the same Wi-Fi · any key closes")
+
+    private fun showPanel(title: String, link: String, hint: String) {
+        panelTitle.text = title
+        panelQr.setImageBitmap(qr(link, dp(200)))
+        panelUrl.text = link
+        panelHint.text = hint
+        setup.visibility = View.VISIBLE
+    }
+
+    // Opens the NHL highlight in an app on the TV that can play it; otherwise shows a QR code for your phone
+    private fun playClip(key: String) {
+        val g = GoalWatch.goals.firstOrNull { it.key == key } ?: return
+        val link = g.clip ?: return toast("The clip isn't posted yet. It usually appears a few minutes after the goal.")
+        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+        catch (_: Exception) { showPanel("${g.scorer} · ${g.detail}", link, "Scan to watch the goal on your phone · any key closes") }
+    }
 
     // Address of the setup page: the TV's own Wi-Fi/Ethernet address
     private fun setupUrl(): String {

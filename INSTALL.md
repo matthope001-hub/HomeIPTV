@@ -55,6 +55,16 @@ Type the code, then `adb connect` to the address and port shown on the **Wireles
 1. Connect with `adb connect 192.168.1.20:5555` (or pair as in option A).
 2. The TV appears in the device list at the top of Android Studio. Pick it and press the green **Run ▶**. It installs and opens TV Dash.
 
+## Allow the goal glow over other apps (once, optional)
+
+When the Avs score while you're in another app (Netflix, YouTube…), TV Dash flashes a silent red glow around the edges of the screen. Google TV hides the setting for this, so turn it on from your computer after installing (connect with `adb connect` as in option A first):
+```bash
+adb shell appops set com.matt.tvdash SYSTEM_ALERT_WINDOW allow
+```
+Then open TV Dash once. The phone setup page shows **Red edge glow over other apps: On ✓** when it worked. To turn it off again, run the same command with `deny` instead of `allow`.
+
+TV Dash keeps a small background watcher running for this. Some streaming apps block other apps from drawing over them, and then the glow won't show there.
+
 ## Open it on the TV
 
 **Apps ▸ See all** (or Your apps) ▸ **TV Dash**. To keep it handy, long-press it and choose **Add to favourites** so it shows on the Google TV home screen.

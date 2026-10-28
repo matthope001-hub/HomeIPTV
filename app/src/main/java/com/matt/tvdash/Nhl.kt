@@ -1,5 +1,6 @@
 package com.matt.tvdash
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import org.json.JSONObject
@@ -7,6 +8,9 @@ import kotlin.concurrent.thread
 
 // Your team's NHL game from the public NHL feed (no key needed): live or not, and its goals so far
 data class NhlGame(val id: Long, val live: Boolean, val favGoals: List<String>)
+
+// One of your team's goals for the Goals row; clip is the NHL highlight link once it's posted
+data class GoalInfo(val key: String, val scorer: String, val detail: String, val clip: String?, val headshot: String?)
 
 object Nhl {
     fun favGame(): NhlGame? = try {
@@ -22,6 +26,26 @@ object Nhl {
                 NhlGame(g.optLong("id"), g.optString("gameState") in setOf("LIVE", "CRIT"), fav)
             }
     } catch (_: Exception) { null }
+
+    /** Your team's goals in a game, with highlight clip links when the NHL has posted them */
+    fun goals(gameId: Long): List<GoalInfo> = try {
+        val scoring = JSONObject(httpGet("https://api-web.nhle.com/v1/gamecenter/$gameId/landing"))
+            .optJSONObject("summary")?.optJSONArray("scoring")
+        val out = mutableListOf<GoalInfo>()
+        for (p in 0 until (scoring?.length() ?: 0)) {
+            val per = scoring!!.getJSONObject(p)
+            val num = per.optJSONObject("periodDescriptor")?.optInt("number") ?: (p + 1)
+            val goals = per.optJSONArray("goals") ?: continue
+            for (i in 0 until goals.length()) {
+                val g = goals.getJSONObject(i)
+                if (teamOf(g) != Config.team) continue
+                val time = g.optString("timeInPeriod")
+                out += GoalInfo("$num-$time", name(g), "P$num $time",
+                    g.optString("highlightClipSharingUrl").ifBlank { null }, g.optString("headshot").ifBlank { null })
+            }
+        }
+        out
+    } catch (_: Exception) { emptyList() }
 
     private fun abbr(t: JSONObject?) = t?.optString("abbrev").orEmpty()
 
@@ -48,25 +72,34 @@ fun goalTitle() = if (Config.team == "COL") "AVALANCHE GOAL!" else "${Config.tea
 
 /** Checks the NHL feed every 10 seconds during a live game and calls [listener] with the scorer */
 object GoalWatch {
-    var listener: ((String) -> Unit)? = null
+    var listener: ((String) -> Unit)? = null      // the TV Dash screen that's showing, if any
+    var onGoalsChanged: (() -> Unit)? = null
+    @Volatile var goals: List<GoalInfo> = emptyList()
+    private var app: Context? = null
     private val ui = Handler(Looper.getMainLooper())
     private var gameId = 0L
     private var seen = 0          // our goals already alerted in this game
     private var running = false
 
-    fun start() { if (!running) { running = true; poll() } }
+    fun start(ctx: Context) { app = ctx.applicationContext; if (!running) { running = true; poll() } }
     fun stop() { running = false; ui.removeCallbacksAndMessages(null) }
 
     private fun poll() {
         thread {
             val g = Nhl.favGame()
+            val list = g?.let { Nhl.goals(it.id) }
             ui.post {
                 if (!running) return@post
                 if (g != null) {
                     // First look at a game (e.g. app opened mid-game): remember its goals without alerting
                     if (g.id != gameId) gameId = g.id
-                    else if (g.live && g.favGoals.size > seen) listener?.invoke(g.favGoals.last())
+                    else if (g.live && g.favGoals.size > seen) {
+                        // TV Dash on screen: full alert. Another app on screen: silent red edge glow
+                        val l = listener
+                        if (l != null) l(g.favGoals.last()) else app?.let { EdgeGlow.show(it) }
+                    }
                     seen = g.favGoals.size   // also drops back if a goal is overturned
+                    if (list != null && list != goals) { goals = list; onGoalsChanged?.invoke() }
                 }
                 ui.postDelayed({ poll() }, if (g?.live == true) 10_000 else 120_000)
             }

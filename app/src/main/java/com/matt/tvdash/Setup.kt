@@ -121,6 +121,7 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <small>3-letter code. Gets the ticker spot and goal alerts.</small>
 <label><input type="checkbox" name="horn" value="on" ${if (Config.horn) "checked" else ""} style="width:auto"> Goal horn sound</label>
 <small>The red goal light always flashes; this turns the horn on or off.</small>
+<small>Red edge glow over other apps (Netflix etc.): ${if (EdgeGlow.allowed) "On ✓" else "Off. Run the adb command in INSTALL.md, then open TV Dash."}</small>
 <button>Save</button>
 </form>
 <form method="post" action="/test">
