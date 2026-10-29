@@ -10,7 +10,7 @@ import kotlin.concurrent.thread
 data class NhlGame(val id: Long, val live: Boolean, val favGoals: List<String>)
 
 // One of your team's goals for the Goals row; clip is the NHL highlight link once it's posted
-data class GoalInfo(val key: String, val scorer: String, val detail: String, val clip: String?, val headshot: String?)
+data class GoalInfo(val key: String, val scorer: String, val detail: String, val clip: String?, val headshot: String?, val clipId: Long? = null)
 
 object Nhl {
     fun favGame(): NhlGame? = try {
@@ -41,7 +41,8 @@ object Nhl {
                 if (teamOf(g) != Config.team) continue
                 val time = g.optString("timeInPeriod")
                 out += GoalInfo("$num-$time", name(g), "P$num $time",
-                    g.optString("highlightClipSharingUrl").ifBlank { null }, g.optString("headshot").ifBlank { null })
+                    g.optString("highlightClipSharingUrl").ifBlank { null }, g.optString("headshot").ifBlank { null },
+                    g.optLong("highlightClip").takeIf { it > 0 })
             }
         }
         out

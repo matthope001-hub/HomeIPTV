@@ -472,8 +472,18 @@ class MainActivity : AppCompatActivity() {
     private fun playClip(key: String) {
         val g = GoalWatch.goals.firstOrNull { it.key == key } ?: return
         val link = g.clip ?: return toast("The clip isn't posted yet. It usually appears a few minutes after the goal.")
-        try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
-        catch (_: Exception) { showPanel("${g.scorer} · ${g.detail}", link, "Scan to watch the goal on your phone · any key closes") }
+        toast("Loading clip…")
+        thread {
+            val video = Clips.resolve(link, g.clipId)
+            ui.post {
+                if (isDestroyed) return@post
+                // Plays right here; if the video can't be found, open the link or show a QR code instead
+                if (video != null) startActivity(Intent(this, PlayerActivity::class.java)
+                    .putExtra("clip", video).putExtra("title", "${g.scorer} · ${g.detail}"))
+                else try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
+                catch (_: Exception) { showPanel("${g.scorer} · ${g.detail}", link, "Scan to watch the goal on your phone · any key closes") }
+            }
+        }
     }
 
     // Address of the setup page: the TV's own Wi-Fi/Ethernet address

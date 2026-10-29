@@ -19,6 +19,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+private const val CLIP = "\u0000clip"   // group name marking a goal clip
+
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var player: ExoPlayer
@@ -35,7 +37,9 @@ class PlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
-        channels = Session.channels   // own copy: the dashboard list can change while we play
+        // A goal clip plays on its own; otherwise our own copy of the channel list (the dashboard's can change while we play)
+        val clip = intent.getStringExtra("clip")
+        channels = if (clip != null) listOf(Channel(intent.getStringExtra("title") ?: "Goal", CLIP, null, clip, null)) else Session.channels
         idx = intent.getIntExtra("idx", 0)
         player = ExoPlayer.Builder(this).build()
 
@@ -59,6 +63,10 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(root)
 
         player.addListener(object : Player.Listener {
+            // A clip closes itself when it finishes
+            override fun onPlaybackStateChanged(state: Int) {
+                if (state == Player.STATE_ENDED && channels.firstOrNull()?.group == CLIP) finish()
+            }
             override fun onPlayerError(e: PlaybackException) { show("Stream offline — press ▲/▼ to change channel") }
         })
         tune()
@@ -71,7 +79,7 @@ class PlayerActivity : AppCompatActivity() {
         val ch = list[idx]
         player.setMediaItem(MediaItem.fromUri(ch.url))
         player.prepare(); player.playWhenReady = true
-        prefs.pushRecent(ch.url)
+        if (ch.group != CLIP) prefs.pushRecent(ch.url)
         show(info() + extra)
     }
 
