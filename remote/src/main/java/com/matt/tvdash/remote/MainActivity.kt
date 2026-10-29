@@ -54,6 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var gameNight: CheckBox
     private lateinit var status: TextView
     private lateinit var update: Button
+    @Volatile private var loaded = false   // true once the TV's settings are on screen; Save needs it
 
     private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { uploadPhoto(it) } }
 
@@ -168,11 +169,14 @@ class MainActivity : AppCompatActivity() {
                 if (n == j.optString("theme")) themes.check(themes.getChildAt(k).id)
             }
             getSharedPreferences("remote", MODE_PRIVATE).edit().putString("tv", address.text.toString().trim()).apply()
+            loaded = true
         }
         "Connected to TV Dash v${j.optString("version")}"
     }
 
     private fun save() {
+        // Never send the blank form: it would wipe the TV's playlists and switch things off
+        if (!loaded) { status.text = "Connect to the TV first, so its settings load before you save."; return }
         fun enc(s: String) = URLEncoder.encode(s, "UTF-8")
         val form = buildList {
             add("playlists=" + enc(playlists.text.toString()))
