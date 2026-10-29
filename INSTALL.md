@@ -28,7 +28,7 @@ Change TV Dash's settings from your Android phone (playlists, guide, team, horn,
 2. Open the downloaded file and choose **Install**. The first time, the phone asks you to allow your browser to install apps: allow it, then go back and install.
 3. Open **TV Dash Remote**, make sure TV Dash is open on the TV, and press **Find TV** (or type the address shown in TV Dash's header and press **Connect**).
 
-To update the phone app, download and install the same link again.
+To update the phone app: when a newer version exists, an **⬆ Update this app** button appears at the top of TV Dash Remote. Tap it, then **Install**. The first time, allow TV Dash Remote to install apps when the phone asks, then tap Update again. (Installing from the link again also works.)
 
 ## 1. Build the app on your computer
 

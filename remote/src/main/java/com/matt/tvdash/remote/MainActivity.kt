@@ -53,6 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var layouts: RadioGroup
     private lateinit var gameNight: CheckBox
     private lateinit var status: TextView
+    private lateinit var update: Button
 
     private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { uploadPhoto(it) } }
 
@@ -72,6 +73,9 @@ class MainActivity : AppCompatActivity() {
         }, LinearLayout.LayoutParams(-1, dp(8)).apply { topMargin = dp(8); bottomMargin = dp(8) })
         status = TextView(this).apply { setTextColor(Color.WHITE); textSize = 15f; setPadding(0, dp(4), 0, dp(4)) }
         col.addView(status)
+        // Shown only when GitHub has a newer version of this app
+        update = button("⬆ Update this app", burgundy) { Updater.install(this) }.apply { visibility = View.GONE }
+        col.addView(update)
 
         address = field(col, "TV address", saved, "192.168.40.17:8080")
         row(col, button("Connect") { load() }, button("Find TV") { findTv() })
@@ -96,6 +100,12 @@ class MainActivity : AppCompatActivity() {
         col.addView(button("🚨 Test horn", burgundy) { post("/test", "Sending…") })
 
         setContentView(ScrollView(this).apply { setBackgroundColor(night); addView(col) })
+        thread {
+            val latest = Updater.latest()
+            if (latest != null && latest > Updater.current(this)) ui.post {
+                update.text = "⬆ Update this app to v1.0.$latest"; update.visibility = View.VISIBLE
+            }
+        }
         if (saved.isNotEmpty()) load() else status.text = "Press Find TV, or type the address shown in TV Dash's header."
     }
 
