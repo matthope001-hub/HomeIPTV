@@ -13,7 +13,9 @@ GitHub builds the app every time the code changes and saves it in the repo. The 
 3. Open Downloader, type the link above into its address box and press **Go**. When it finishes, choose **Install**.
 4. Afterwards choose **Delete** in Downloader to remove the downloaded file.
 
-To update later, repeat step 3; your favourites and settings are kept. GitHub caches the file for a few minutes, so add a different number to the end each time (`...tvdash.apk?v=4`, `?v=5`…) to be sure you get the newest build. The build number shows next to "TV Dash" in the header. GitHub builds and your own computer's builds share one signing key (`tvdash-debug.keystore`), so either can install over the other.
+**Updating after this:** when a newer build exists, TV Dash shows **⬆ Update v1.0.N** at the start of the categories row. Select it, then choose **Install** on the TV's prompt. The first time, the TV asks you to allow TV Dash to install apps: turn it on, press Back, and select Update again. (If that screen doesn't open: **Settings ▸ Apps ▸ Security & restrictions ▸ Unknown sources ▸ TV Dash**.)
+
+Without the button, repeat step 3; your favourites and settings are kept. GitHub caches the file for a few minutes, so add a different number to the end each time (`...tvdash.apk?v=4`, `?v=5`…) to be sure you get the newest build. The build number shows next to "TV Dash" in the header. GitHub builds and your own computer's builds share one signing key (`tvdash-debug.keystore`), so either can install over the other.
 
 **First time only:** if Install says **App not installed**, an older copy signed with a different key is on the TV. Uninstall TV Dash (**Settings ▸ Apps ▸ TV Dash ▸ Uninstall**), then install again. This clears favourites and settings once.
 

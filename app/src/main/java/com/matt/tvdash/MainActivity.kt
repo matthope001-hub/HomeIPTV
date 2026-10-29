@@ -38,6 +38,7 @@ private const val FAV = "★ Favourites"
 private const val RECENT = "⟲ Recent"
 private const val SETUP = "📱 Phone setup"
 private const val GOALS = "🚨 Goals"
+private const val UPDATE = "⬆ Update"
 private const val GOAL = "goal:"   // key prefix for goal tiles in the grid
 private const val IDLE_MS = 5 * 60_000L   // screensaver after 5 minutes without a key press
 
@@ -74,6 +75,7 @@ class MainActivity : AppCompatActivity() {
     // a 1080p or 4K screen the same way and nothing ends up off screen
     private var unit = 1f
     private fun dp(v: Int) = (v * unit).toInt()
+    private var updateTo: Int? = null   // newer build on GitHub, if any
     private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
     private val ui = Handler(Looper.getMainLooper())
@@ -121,7 +123,7 @@ class MainActivity : AppCompatActivity() {
 
         // Categories
         root.addView(section("Free Live TV"))
-        catAdapter = TileAdapter(112, 34, unit, 12f, textOnly = true, onClick = { if (it.key == SETUP) showSetup() else { category = it.key; chAdapter.firstPage(); showChannels() } },
+        catAdapter = TileAdapter(112, 34, unit, 12f, textOnly = true, onClick = { if (it.key == UPDATE) Updater.install(this) else if (it.key == SETUP) showSetup() else { category = it.key; chAdapter.firstPage(); showChannels() } },
             onLong = { t -> startMove(catAdapter, catRow, 1, t.key) { prefs.setOrder("cat", it) } })
         catAdapter.items = listOf(SETUP, FAV, RECENT, "All").ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
         catAdapter.slots = usable / dp(120)
@@ -205,6 +207,7 @@ class MainActivity : AppCompatActivity() {
         })
         tick()
         loadChannels()
+        checkUpdate()
         loadScores()
         // Keep watching for goals in the background so the edge glow can show over other apps
         try {
@@ -359,8 +362,10 @@ class MainActivity : AppCompatActivity() {
         val groups = allChannels.map { it.group }.distinct().sorted()
         // "🚨 Goals" comes first whenever your team has goals today
         val goals = if (GoalWatch.goals.isNotEmpty()) listOf(GOALS) else emptyList()
-        catAdapter.items = (goals + (listOf(SETUP, FAV, RECENT, "All") + groups).ordered(prefs.order("cat")) { it })
-            .map { Tile(it, if (it == GOALS) "🚨 ${Config.team} goals" else it) }
+        // "⬆ Update" comes first when GitHub has a newer build
+        val update = if (updateTo != null) listOf(UPDATE) else emptyList()
+        catAdapter.items = (update + goals + (listOf(SETUP, FAV, RECENT, "All") + groups).ordered(prefs.order("cat")) { it })
+            .map { Tile(it, when (it) { GOALS -> "🚨 ${Config.team} goals"; UPDATE -> "⬆ Update v1.0.$updateTo"; else -> it }) }
         if (category == FAV && prefs.get("ch").isEmpty()) category = "All"
     }
 
@@ -426,6 +431,19 @@ class MainActivity : AppCompatActivity() {
         AlertDialog.Builder(this).setTitle(title)
             .setItems(actions.map { it.first }.toTypedArray()) { _, i -> actions[i].second() }
             .show()
+    }
+
+    // Looks for a newer build on GitHub now and every 3 hours
+    private fun checkUpdate() {
+        thread {
+            val latest = Updater.latest()
+            ui.post {
+                if (isDestroyed) return@post
+                val newer = latest?.takeIf { it > Updater.current(this) }
+                if (newer != updateTo) { updateTo = newer; buildCategories(); if (allChannels.isNotEmpty()) showChannels() }
+                ui.postDelayed({ checkUpdate() }, 3 * 3_600_000L)
+            }
+        }
     }
 
     private fun showSetup() = showPanel("Scan with your phone", setupUrl(), "Phone must be on the same Wi-Fi · any key closes")

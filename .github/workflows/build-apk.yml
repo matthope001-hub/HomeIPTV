@@ -36,9 +36,10 @@ jobs:
           set -x
           mkdir -p apk
           cp app/build/outputs/apk/debug/app-debug.apk apk/tvdash.apk
+          echo "${GITHUB_RUN_NUMBER}" > apk/version.txt   # the app compares this with its own build number
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apk/tvdash.apk
+          git add apk/tvdash.apk apk/version.txt
           git commit -m "Build APK from ${GITHUB_SHA::7} [skip ci]" || exit 0
           git pull --rebase origin main
           git push origin HEAD:main
