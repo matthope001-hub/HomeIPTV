@@ -37,6 +37,12 @@ To hear it, open TV Dash on the TV, then on the phone setup page press **🚨 Te
    ```
    It prints `Success`.
 
+**TV is off right now?** Run the waiting script instead (Windows, from the `HomeIPTV` folder in Android Studio's Terminal):
+```bash
+.\install-tv.ps1 192.168.40.17
+```
+It tries every 30 seconds until the TV is on, then installs the app and turns on the edge-glow permission. The very first connection still needs someone at the TV to press **Allow** on the "Allow USB debugging?" prompt. If Windows says running scripts is disabled, run `powershell -ExecutionPolicy Bypass -File .\install-tv.ps1 192.168.40.17` instead.
+
 **If `adb connect` is refused** (some newer Google TV updates): on the TV open **Developer options ▸ Wireless debugging** → On ▸ **Pair device with pairing code**. It shows an address, port and code:
 ```bash
 adb pair 192.168.1.20:37000
