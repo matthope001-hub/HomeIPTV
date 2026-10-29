@@ -15,13 +15,33 @@ import android.graphics.drawable.Drawable
 
 /** Avalanche-inspired colours (no logos or marks, colours only) */
 object Theme {
-    val burgundy = Color.parseColor("#6F263D")
-    val steel = Color.parseColor("#236192")
-    val silver = Color.parseColor("#A2AAAD")
-    val night = Color.parseColor("#0A1220")
+    // Colour sets you can pick from the phone: accent, steel, silver, night, middle of the background
+    val presets = linkedMapOf(
+        "avalanche" to listOf("#6F263D", "#236192", "#A2AAAD", "#0A1220", "#2A1830"),
+        "midnight" to listOf("#2B3A55", "#3E6FB0", "#9AA5B1", "#05070C", "#121826"),
+        "forest" to listOf("#1F4D3A", "#3C8D5A", "#A9B8A9", "#07120D", "#11241A"),
+        "crimson" to listOf("#8B1A1A", "#5A6475", "#B5B5B5", "#0D0909", "#2A1212"),
+    )
+    var name = "avalanche"; private set
+    var burgundy = 0; private set     // the accent colour (burgundy in the Avalanche set)
+    var steel = 0; private set
+    var silver = 0; private set
+    var night = 0; private set
+    var mid = 0; private set
+    var tileFocus = 0; private set    // accent, slightly see-through, for the focused tile
     val ice = Color.parseColor("#EAF2F8")
     val tile = Color.parseColor("#CC101A2B")       // translucent so the rink shows through
-    val tileFocus = Color.parseColor("#E66F263D")  // burgundy when focused
+
+    init { apply("avalanche") }
+
+    fun apply(n: String) {
+        name = if (n in presets) n else "avalanche"
+        val c = presets.getValue(name).map { Color.parseColor(it) }
+        burgundy = c[0]; steel = c[1]; silver = c[2]; night = c[3]; mid = c[4]
+        tileFocus = (c[0] and 0x00FFFFFF) or 0xE6000000.toInt()
+    }
+
+    fun label(n: String) = n.replaceFirstChar { it.uppercase() }
 }
 
 /**
@@ -39,9 +59,9 @@ class RinkBackground(private val centreIce: Drawable? = null) : Drawable() {
     override fun onBoundsChange(b: Rect) {
         if (b.isEmpty) return
         val w = b.width().toFloat(); val h = b.height().toFloat()
-        base = LinearGradient(0f, 0f, w, h, intArrayOf(Theme.burgundy, Color.parseColor("#2A1830"), Theme.night),
+        base = LinearGradient(0f, 0f, w, h, intArrayOf(Theme.burgundy, Theme.mid, Theme.night),
             floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
-        glow = RadialGradient(w / 2, h * 0.55f, w * 0.55f, Color.parseColor("#33236192"), Color.TRANSPARENT, Shader.TileMode.CLAMP)
+        glow = RadialGradient(w / 2, h * 0.55f, w * 0.55f, (Theme.steel and 0x00FFFFFF) or 0x33000000, Color.TRANSPARENT, Shader.TileMode.CLAMP)
     }
 
     override fun draw(c: Canvas) {

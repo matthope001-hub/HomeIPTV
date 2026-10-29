@@ -13,6 +13,8 @@ import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
@@ -47,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var team: EditText
     private lateinit var horn: CheckBox
     private lateinit var english: CheckBox
+    private lateinit var themes: RadioGroup
     private lateinit var status: TextView
 
     private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { uploadPhoto(it) } }
@@ -76,10 +79,14 @@ class MainActivity : AppCompatActivity() {
         team = field(col, "Favourite NHL team (3 letters)", "", "COL")
         horn = check(col, "Goal horn sound")
         english = check(col, "English channels only")
+        label(col, "Colours")
+        themes = RadioGroup(this).also { col.addView(it) }
         col.addView(button("Save to TV") { save() })
 
         label(col, "Centre-ice picture")
         row(col, button("Choose picture") { pickPhoto.launch("image/*") }, button("Remove", burgundy) { post("/photo-remove", "Removing…") })
+        label(col, "TV Dash app")
+        col.addView(button("⬆ Update TV Dash") { post("/update", "Checking for updates…") })
         label(col, "Goal horn")
         col.addView(button("🚨 Test horn", burgundy) { post("/test", "Sending…") })
 
@@ -133,6 +140,16 @@ class MainActivity : AppCompatActivity() {
             team.setText(j.optString("team"))
             horn.isChecked = j.optBoolean("horn", true)
             english.isChecked = j.optBoolean("english", true)
+            themes.removeAllViews()
+            val names = j.optJSONArray("themes")
+            for (k in 0 until (names?.length() ?: 0)) {
+                val n = names!!.getString(k)
+                themes.addView(RadioButton(this).apply {
+                    id = View.generateViewId(); tag = n
+                    text = n.replaceFirstChar { it.uppercase() }; setTextColor(Color.WHITE); textSize = 15f
+                })
+                if (n == j.optString("theme")) themes.check(themes.getChildAt(k).id)
+            }
             getSharedPreferences("remote", MODE_PRIVATE).edit().putString("tv", address.text.toString().trim()).apply()
         }
         "Connected to TV Dash v${j.optString("version")}"
@@ -146,6 +163,7 @@ class MainActivity : AppCompatActivity() {
             add("team=" + enc(team.text.toString()))
             if (horn.isChecked) add("horn=on")
             if (english.isChecked) add("english=on")
+            themes.findViewById<RadioButton>(themes.checkedRadioButtonId)?.tag?.let { add("theme=" + enc(it.toString())) }
         }.joinToString("&").toByteArray()
         job("Saving…") { message(request(base() + "/save", "POST", "application/x-www-form-urlencoded", form)) }
     }

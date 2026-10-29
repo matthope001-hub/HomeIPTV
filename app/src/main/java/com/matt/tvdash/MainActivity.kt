@@ -78,6 +78,7 @@ class MainActivity : AppCompatActivity() {
     private var unit = 1f
     private fun dp(v: Int) = (v * unit).toInt()
     private var updateTo: Int? = null   // newer build on GitHub, if any
+    private var shownTheme = ""   // colour set the screen was built with
     private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
     private val ui = Handler(Looper.getMainLooper())
@@ -89,6 +90,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         Config.load(prefs)
+        shownTheme = Theme.name
         SetupServer.start(this, prefs)   // start first: the address shown depends on the port it gets
         val url = setupUrl()
         unit = resources.displayMetrics.heightPixels / 540f
@@ -223,7 +225,8 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) { }
         GoalWatch.start(this)
         GoalWatch.onGoalsChanged = { if (allChannels.isNotEmpty()) buildCategories(); if (category == GOALS) showChannels() }
-        SetupServer.onSaved = { reload() }
+        // A new colour set rebuilds the whole screen; other settings just reload the channels
+        SetupServer.onSaved = { if (Theme.name != shownTheme) recreate() else reload() }
         SetupServer.onPhoto = { root.background = rink(); saver.background = rink() }
     }
 
@@ -233,10 +236,11 @@ class MainActivity : AppCompatActivity() {
         if (allChannels.isNotEmpty()) showChannels()   // refresh Recent and guide titles
         resetIdle()
         GoalWatch.listener = { showGoal(it) }
+        SetupServer.onUpdate = { Updater.install(this) }
         EdgeGlow.check(this)
     }
 
-    override fun onPause() { super.onPause(); ui.removeCallbacks(idle); GoalWatch.listener = null }
+    override fun onPause() { super.onPause(); ui.removeCallbacks(idle); GoalWatch.listener = null; SetupServer.onUpdate = null }
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)

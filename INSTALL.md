@@ -21,7 +21,7 @@ Without the button, repeat step 3; your favourites and settings are kept. GitHub
 
 ## Phone app: TV Dash Remote
 
-Change TV Dash's settings from your Android phone (playlists, guide, team, horn, English-only, centre-ice picture, test horn).
+Change TV Dash's settings from your Android phone (playlists, guide, team, horn, English-only, colours, centre-ice picture, test horn), and start a TV Dash update with **⬆ Update TV Dash** (then choose Install on the TV).
 
 1. On the phone, open this link and download the file:
    `https://raw.githubusercontent.com/matthope001-hub/HomeIPTV/main/apk/remote.apk`

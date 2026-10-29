@@ -28,12 +28,15 @@ object Config {
     @Volatile var team: String = "COL"
     @Volatile var horn: Boolean = true
     @Volatile var english: Boolean = true
+    @Volatile var theme: String = "avalanche"
     fun load(p: Prefs) {
         playlists = p.playlists().ifEmpty { listOf(PLAYLIST_URL) }
         epg = p.str("epg", EPG_URL)
         team = p.str("team", "COL")
         horn = p.str("horn", "on") == "on"
         english = p.str("english", "on") == "on"
+        theme = p.str("theme", "avalanche")
+        Theme.apply(theme)
     }
 }
 
@@ -203,6 +206,7 @@ class Prefs(ctx: Context) {
     // Settings from the phone setup page
     fun playlists(): List<String> = str("playlists", "").split('\n').filter { it.isNotBlank() }
     fun str(key: String, def: String): String = sp.getString(key, def) ?: def
+    fun put(key: String, value: String) = sp.edit().putString(key, value).apply()
     fun saveSettings(playlists: List<String>, epg: String, team: String, horn: Boolean, english: Boolean) =
         sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team)
             .putString("horn", if (horn) "on" else "off").putString("english", if (english) "on" else "off").apply()

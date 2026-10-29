@@ -24,6 +24,7 @@ object SetupServer {
     var port = 8080
         private set
     var onSaved: (() -> Unit)? = null
+    var onUpdate: (() -> Unit)? = null   // set while TV Dash is on screen
     var onPhoto: (() -> Unit)? = null   // the centre-ice picture changed
     private var app: Context? = null
     private var server: ServerSocket? = null
@@ -83,6 +84,7 @@ object SetupServer {
             "200 OK" to when {
                 method == "POST" && path == "/save" -> { save(body, prefs); page("Saved ✓ The TV is reloading channels.") }
                 method == "POST" && path == "/test" -> page(testHorn())
+                method == "POST" && path == "/update" -> page(updateTv())
                 method == "POST" && path == "/photo" -> page(savePhoto(raw, type))
                 method == "POST" && path == "/photo-remove" -> { photoFile()?.delete(); ui.post { onPhoto?.invoke() }; page("Picture removed.") }
                 path == "/api/settings" -> settingsJson()   // read by the TV Dash Remote phone app
@@ -119,6 +121,7 @@ object SetupServer {
         val epg = form["epg"].orEmpty().trim().takeIf { it.isEmpty() || it.startsWith("http") }.orEmpty()
         val team = form["team"].orEmpty().trim().uppercase().filter { it.isLetter() }.take(3).ifEmpty { "COL" }
         prefs.saveSettings(playlists, epg, team, form["horn"] == "on", form["english"] == "on")
+        form["theme"]?.takeIf { it in Theme.presets }?.let { prefs.put("theme", it) }
         Config.load(prefs)
         ui.post { onSaved?.invoke() }
     }
@@ -137,8 +140,21 @@ object SetupServer {
         .put("team", Config.team)
         .put("horn", Config.horn)
         .put("english", Config.english)
+        .put("theme", Config.theme)
+        .put("themes", org.json.JSONArray(Theme.presets.keys.toList()))
         .put("version", app?.let { it.packageManager.getPackageInfo(it.packageName, 0).versionName }.orEmpty())
         .toString()
+
+    // Checks GitHub and, if there's a newer build, starts the update on the TV
+    private fun updateTv(): String {
+        val ctx = app ?: return "The TV isn't ready yet. Try again."
+        val latest = Updater.latest() ?: return "Couldn't check GitHub for updates."
+        val current = Updater.current(ctx)
+        if (latest <= current) return "TV Dash is up to date (v1.0.$current)."
+        val go = onUpdate ?: return "Open TV Dash on the TV, then try again."
+        ui.post { go() }
+        return "Downloading v1.0.$latest on the TV. Choose Install on the TV to finish."
+    }
 
     /** Where the centre-ice picture is kept on the TV (never uploaded anywhere) */
     fun photoFile(): File? = app?.let { File(it.filesDir, "centre_ice.jpg") }
@@ -184,7 +200,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:linear-gradient(160deg
 main{max-width:560px;margin:auto;padding:24px 16px}
 h1{margin:0 0 4px}.stripe{height:8px;background:linear-gradient(#fff 25%,#236192 25% 75%,#fff 75%);margin-bottom:20px}
 label{display:block;margin:18px 0 6px;color:#A2AAAD;font-weight:600}
-textarea,input{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:2px solid #236192;background:#101A2B;color:#fff;font-size:15px}
+textarea,input,select{width:100%;box-sizing:border-box;padding:10px;border-radius:10px;border:2px solid #236192;background:#101A2B;color:#fff;font-size:15px}
 textarea{height:130px}small{color:#A2AAAD}
 button{margin-top:22px;width:100%;padding:14px;border:0;border-radius:12px;background:#236192;color:#fff;font-size:17px;font-weight:700}
 .msg{background:#236192;padding:12px;border-radius:10px;margin-bottom:12px}
@@ -202,6 +218,8 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <label>Favourite NHL team</label>
 <input name="team" value="${esc(Config.team)}" maxlength="3" placeholder="COL">
 <small>3-letter code. Gets the ticker spot and goal alerts.</small>
+<label>Colours</label>
+<select name="theme">${Theme.presets.keys.joinToString("") { k -> "<option value=\"$k\"${if (k == Config.theme) " selected" else ""}>${Theme.label(k)}</option>" }}</select>
 <label><input type="checkbox" name="horn" value="on" ${if (Config.horn) "checked" else ""} style="width:auto"> Goal horn sound</label>
 <small>The red goal light always flashes; this turns the horn on or off.</small>
 <small>Red edge glow over other apps (Netflix etc.): ${if (EdgeGlow.allowed) "On ✓" else "Off. Run the adb command in INSTALL.md, then open TV Dash."}</small>
@@ -214,6 +232,7 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <small>Shown faintly at centre ice. It stays on the TV and isn't uploaded anywhere else.</small>
 </form>
 <form method="post" action="/photo-remove"><button style="background:#333">Remove picture</button></form>
+<form method="post" action="/update"><button>⬆ Update TV Dash</button></form>
 <form method="post" action="/test">
 <button style="background:#6F263D">🚨 Test horn</button>
 <small>Plays the goal banner, red light and horn on the TV, even if the horn is switched off.</small>
