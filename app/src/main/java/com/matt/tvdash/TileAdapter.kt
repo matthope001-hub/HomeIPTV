@@ -5,6 +5,7 @@ import android.graphics.drawable.GradientDrawable
 import android.text.TextUtils
 import android.util.TypedValue
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -63,7 +64,7 @@ class TileAdapter(
 
     private fun refresh() {
         page = page.coerceIn(0, pages - 1)
-        shown = if (!paged) all else all.drop(page * per).take(per) + Tile(MORE, if (textOnly) "More ▸ ${page + 1}/$pages" else "More ▸\n${page + 1} / $pages")   // one line on short chips
+        shown = if (!paged) all else all.drop(page * per).take(per) + Tile(MORE, if (textOnly) "◀ ${page + 1}/$pages ▶" else "◀ More ▶\n${page + 1} / $pages")   // one line on short chips
         notifyDataSetChanged()
     }
 
@@ -78,11 +79,14 @@ class TileAdapter(
         refresh()
     }
 
-    private fun nextPage() {
-        page = (page + 1) % pages
+    // Turns the page both ways (wrapping round) and puts the selection where the remote expects it
+    private fun turn(by: Int, focusAt: (Int) -> Int) {
+        page = (page + by + pages) % pages
         refresh()
-        rv?.post { rv?.findViewHolderForAdapterPosition(shown.size - 1)?.itemView?.requestFocus() }
+        rv?.post { rv?.findViewHolderForAdapterPosition(focusAt(shown.size))?.itemView?.requestFocus() }
     }
+
+    private fun nextPage() = turn(1) { it - 1 }   // OK on More: stay on More
 
     override fun onAttachedToRecyclerView(r: RecyclerView) { rv = r }
 
@@ -150,6 +154,16 @@ class TileAdapter(
             else -> h.img.setImageResource(android.R.drawable.ic_media_play)
         }
         h.root.setOnClickListener { if (more) nextPage() else onClick(t) }
+        // ◀ on the first tile goes back a page; ▶ on More goes forward to the first tile
+        h.root.setOnKeyListener { _, code, e ->
+            if (!paged || e.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener false
+            val pos = h.bindingAdapterPosition
+            when {
+                code == KeyEvent.KEYCODE_DPAD_LEFT && pos == 0 -> { turn(-1) { maxOf(0, it - 2) }; true }
+                code == KeyEvent.KEYCODE_DPAD_RIGHT && more -> { turn(1) { 0 }; true }
+                else -> false
+            }
+        }
         h.root.setOnLongClickListener { if (!more) onLong(t); true }
     }
 
