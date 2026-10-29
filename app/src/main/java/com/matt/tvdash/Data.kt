@@ -29,6 +29,8 @@ object Config {
     @Volatile var horn: Boolean = true
     @Volatile var english: Boolean = true
     @Volatile var theme: String = "avalanche"
+    @Volatile var layout: String = "classic"
+    @Volatile var gameNight: Boolean = true   // switch to Jumbotron while your team plays
     fun load(p: Prefs) {
         playlists = p.playlists().ifEmpty { listOf(PLAYLIST_URL) }
         epg = p.str("epg", EPG_URL)
@@ -36,6 +38,8 @@ object Config {
         horn = p.str("horn", "on") == "on"
         english = p.str("english", "on") == "on"
         theme = p.str("theme", "avalanche")
+        layout = p.str("layout", "classic")
+        gameNight = p.str("gamenight", "on") == "on"
         Theme.apply(theme)
     }
 }

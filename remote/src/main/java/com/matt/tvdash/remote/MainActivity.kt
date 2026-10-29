@@ -50,6 +50,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var horn: CheckBox
     private lateinit var english: CheckBox
     private lateinit var themes: RadioGroup
+    private lateinit var layouts: RadioGroup
+    private lateinit var gameNight: CheckBox
     private lateinit var status: TextView
 
     private val pickPhoto = registerForActivityResult(ActivityResultContracts.GetContent()) { uri -> uri?.let { uploadPhoto(it) } }
@@ -79,6 +81,9 @@ class MainActivity : AppCompatActivity() {
         team = field(col, "Favourite NHL team (3 letters)", "", "COL")
         horn = check(col, "Goal horn sound")
         english = check(col, "English channels only")
+        label(col, "Layout")
+        layouts = RadioGroup(this).also { col.addView(it) }
+        gameNight = check(col, "Switch to Jumbotron while my team is playing")
         label(col, "Colours")
         themes = RadioGroup(this).also { col.addView(it) }
         col.addView(button("Save to TV") { save() })
@@ -140,6 +145,8 @@ class MainActivity : AppCompatActivity() {
             team.setText(j.optString("team"))
             horn.isChecked = j.optBoolean("horn", true)
             english.isChecked = j.optBoolean("english", true)
+            radios(layouts, j.optJSONArray("layouts"), j.optString("layout"))
+            gameNight.isChecked = j.optBoolean("gameNight", true)
             themes.removeAllViews()
             val names = j.optJSONArray("themes")
             for (k in 0 until (names?.length() ?: 0)) {
@@ -163,6 +170,10 @@ class MainActivity : AppCompatActivity() {
             add("team=" + enc(team.text.toString()))
             if (horn.isChecked) add("horn=on")
             if (english.isChecked) add("english=on")
+            layouts.findViewById<RadioButton>(layouts.checkedRadioButtonId)?.tag?.let {
+                add("layout=" + enc(it.toString()))
+                if (gameNight.isChecked) add("gamenight=on")
+            }
             themes.findViewById<RadioButton>(themes.checkedRadioButtonId)?.tag?.let { add("theme=" + enc(it.toString())) }
         }.joinToString("&").toByteArray()
         job("Saving…") { message(request(base() + "/save", "POST", "application/x-www-form-urlencoded", form)) }
@@ -195,6 +206,20 @@ class MainActivity : AppCompatActivity() {
         val at = found.get() ?: return@job "Couldn't find TV Dash. Make sure it's open on the TV, then try again."
         ui.post { address.setText(at); load() }
         "Found the TV at $at"
+    }
+
+    // One radio button per name, the current one ticked
+    private fun radios(group: RadioGroup, names: org.json.JSONArray?, current: String) {
+        group.removeAllViews()
+        for (k in 0 until (names?.length() ?: 0)) {
+            val n = names!!.getString(k)
+            val b = RadioButton(this).apply {
+                id = View.generateViewId(); tag = n
+                text = n.replaceFirstChar { it.uppercase() }; setTextColor(Color.WHITE); textSize = 15f
+            }
+            group.addView(b)
+            if (n == current) group.check(b.id)
+        }
     }
 
     // ---------- Views ----------

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.drawable.Drawable
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -78,6 +79,8 @@ class MainActivity : AppCompatActivity() {
     private var unit = 1f
     private fun dp(v: Int) = (v * unit).toInt()
     private var updateTo: Int? = null   // newer build on GitHub, if any
+    private var shownLayout = ""   // layout the screen was built with
+    private var hero: Hero? = null
     private var shownTheme = ""   // colour set the screen was built with
     private var gen = 0   // bumps on each channel reload so older loads are ignored
     private var swallowUp = false
@@ -91,6 +94,8 @@ class MainActivity : AppCompatActivity() {
         prefs = Prefs(this)
         Config.load(prefs)
         shownTheme = Theme.name
+        val look = Look.current()
+        shownLayout = look
         SetupServer.start(this, prefs)   // start first: the address shown depends on the port it gets
         val url = setupUrl()
         unit = resources.displayMetrics.heightPixels / 540f
@@ -98,7 +103,7 @@ class MainActivity : AppCompatActivity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rink()
+            background = if (look == "classic") rink() else Look.background(look)
             setPadding(dp(48), dp(20), dp(48), dp(12))
             clipChildren = false
         }
@@ -118,9 +123,13 @@ class MainActivity : AppCompatActivity() {
         clock = text("", 20f, false); header.addView(clock)
         root.addView(header)
         root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(6) })
+        // Modern layouts add a big panel at the top: Spotlight card, Jumbotron scoreboard or Jersey headline
+        if (look != "classic") hero = Hero(this, unit, look, photo()).also {
+            root.addView(it.view, LinearLayout.LayoutParams(-1, dp(it.height)).apply { topMargin = dp(6) })
+        }
 
         // Apps row
-        root.addView(section("Apps  (long-press to pin)"))
+        if (look == "classic") root.addView(section("Apps  (long-press to pin)"))
         appsAdapter = TileAdapter(112, 84, unit, 11f, onClick = { launchApp(it.key) }, onLong = { t ->
             menu(t.title, listOf(
                 (if (t.pinned) "Unpin" else "Pin") to { pin("apps", t.key); loadApps() },
@@ -131,7 +140,7 @@ class MainActivity : AppCompatActivity() {
         root.addView(appsRow, LinearLayout.LayoutParams(-1, dp(92)))
 
         // Categories
-        root.addView(section("Free Live TV"))
+        if (look == "classic") root.addView(section("Free Live TV"))
         catAdapter = TileAdapter(112, 34, unit, 12f, textOnly = true, onClick = { if (it.key == UPDATE) Updater.install(this) else if (it.key == SETUP) showSetup() else { category = it.key; chAdapter.firstPage(); showChannels() } },
             onLong = { t -> startMove(catAdapter, catRow, 1, t.key) { prefs.setOrder("cat", it) } })
         catAdapter.items = listOf(SETUP, FAV, RECENT, "All").ordered(prefs.order("cat")) { it }.map { Tile(it, it) }
@@ -226,8 +235,8 @@ class MainActivity : AppCompatActivity() {
         GoalWatch.start(this)
         GoalWatch.onGoalsChanged = { if (allChannels.isNotEmpty()) buildCategories(); if (category == GOALS) showChannels() }
         // A new colour set rebuilds the whole screen; other settings just reload the channels
-        SetupServer.onSaved = { if (Theme.name != shownTheme) recreate() else reload() }
-        SetupServer.onPhoto = { root.background = rink(); saver.background = rink() }
+        SetupServer.onSaved = { if (Theme.name != shownTheme || Look.current() != shownLayout) recreate() else reload() }
+        SetupServer.onPhoto = { if (shownLayout == "classic") { root.background = rink(); saver.background = rink() } else recreate() }
     }
 
     override fun onResume() {
@@ -256,6 +265,10 @@ class MainActivity : AppCompatActivity() {
                 if (isDestroyed) return@post
                 val fav = items.filterIsInstance<TickerItem.Game>().firstOrNull { it.isFav }
                 saverAvs.text = favLine(fav)
+                hero?.update(fav)
+                // Game-night switch: rebuild in Jumbotron when the game starts, and back when it ends
+                Look.gameLive = fav?.state == "live"
+                if (Look.current() != shownLayout) { recreate(); return@post }
                 if (items != lastScores) { lastScores = items; ticker.setItems(items) }
                 // Check more often while the Avs are playing so goal alerts arrive sooner
                 ui.postDelayed({ loadScores() }, if (fav?.state == "live") 20_000 else 60_000)
@@ -503,13 +516,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Add your own image as app/src/main/res/drawable/centre_ice.png to show it at centre ice
-    private fun rink(): RinkBackground {
-        // A picture uploaded from the phone setup page wins over one built into the app
+    private fun rink() = RinkBackground(photo())
+
+    // Your picture: one uploaded from the phone wins over the one built into the app
+    private fun photo(): Drawable? {
         SetupServer.photoFile()?.takeIf { it.exists() }?.let { f ->
-            BitmapFactory.decodeFile(f.path)?.let { return RinkBackground(BitmapDrawable(resources, it)) }
+            BitmapFactory.decodeFile(f.path)?.let { return BitmapDrawable(resources, it) }
         }
         val logoId = resources.getIdentifier("centre_ice", "drawable", packageName)
-        return RinkBackground(if (logoId != 0) getDrawable(logoId)?.mutate() else null)
+        return if (logoId != 0) getDrawable(logoId)?.mutate() else null
     }
 
     private fun stripe() = View(this).apply { background = JerseyStripe() }

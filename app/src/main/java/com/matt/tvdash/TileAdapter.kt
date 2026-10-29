@@ -89,9 +89,14 @@ class TileAdapter(
     class VH(val root: LinearLayout, val img: ImageView, val label: TextView) : RecyclerView.ViewHolder(root)
 
     private fun bg(focused: Boolean, lifted: Boolean) = GradientDrawable().apply {
-        cornerRadius = px(10).toFloat()
+        val look = Look.current()
+        cornerRadius = px(if (look == "jumbotron" || look == "jersey") 3 else 10).toFloat()
         when {
             lifted -> { setColor(Theme.steel); setStroke(px(3), Color.WHITE) }
+            // Jumbotron: dark LED panels with an amber glow on the selected one
+            look == "jumbotron" -> { setColor(Color.parseColor("#111111")); setStroke(px(2), if (focused) Look.amber else Color.parseColor("#333333")) }
+            // Jersey: see-through panels with white outlines
+            look == "jersey" -> { setColor(if (focused) Theme.tileFocus else Color.argb(64, 0, 0, 0)); setStroke(px(2), if (focused) Color.WHITE else Color.argb(110, 255, 255, 255)) }
             focused -> { setColor(Theme.tileFocus); setStroke(px(2), Color.WHITE) }
             else -> { setColor(Theme.tile); setStroke(px(2), Color.argb(90, 35, 97, 146)) }
         }
@@ -134,7 +139,8 @@ class TileAdapter(
         h.root.background = bg(h.root.hasFocus(), lifted)
         val s = if (lifted) 1.12f else if (h.root.hasFocus()) 1.06f else 1f
         h.root.scaleX = s; h.root.scaleY = s
-        h.label.text = (if (lifted) "⇄ " else "") + (if (t.pinned) "★ ${t.title}" else t.title)
+        h.label.text = ((if (lifted) "⇄ " else "") + (if (t.pinned) "★ ${t.title}" else t.title))
+            .let { if (Look.current() == "jersey") it.uppercase() else it }
         h.img.dispose()   // cancel any image load still pending from a recycled tile
         h.img.visibility = if (textOnly || more) View.GONE else View.VISIBLE
         when {

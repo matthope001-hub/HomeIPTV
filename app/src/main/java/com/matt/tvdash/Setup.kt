@@ -122,6 +122,10 @@ object SetupServer {
         val team = form["team"].orEmpty().trim().uppercase().filter { it.isLetter() }.take(3).ifEmpty { "COL" }
         prefs.saveSettings(playlists, epg, team, form["horn"] == "on", form["english"] == "on")
         form["theme"]?.takeIf { it in Theme.presets }?.let { prefs.put("theme", it) }
+        form["layout"]?.takeIf { it in Look.layouts }?.let {
+            prefs.put("layout", it)
+            prefs.put("gamenight", if (form["gamenight"] == "on") "on" else "off")   // sent together with the layout
+        }
         Config.load(prefs)
         ui.post { onSaved?.invoke() }
     }
@@ -141,6 +145,9 @@ object SetupServer {
         .put("horn", Config.horn)
         .put("english", Config.english)
         .put("theme", Config.theme)
+        .put("layout", Config.layout)
+        .put("layouts", org.json.JSONArray(Look.layouts))
+        .put("gameNight", Config.gameNight)
         .put("themes", org.json.JSONArray(Theme.presets.keys.toList()))
         .put("version", app?.let { it.packageManager.getPackageInfo(it.packageName, 0).versionName }.orEmpty())
         .toString()
@@ -218,6 +225,10 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <label>Favourite NHL team</label>
 <input name="team" value="${esc(Config.team)}" maxlength="3" placeholder="COL">
 <small>3-letter code. Gets the ticker spot and goal alerts.</small>
+<label>Colours</label>
+<label>Layout</label>
+<select name="layout">${Look.layouts.joinToString("") { k -> "<option value=\"$k\"${if (k == Config.layout) " selected" else ""}>${Look.label(k)}</option>" }}</select>
+<label><input type="checkbox" name="gamenight" value="on" ${if (Config.gameNight) "checked" else ""} style="width:auto"> Switch to Jumbotron while ${esc(Config.team)} is playing</label>
 <label>Colours</label>
 <select name="theme">${Theme.presets.keys.joinToString("") { k -> "<option value=\"$k\"${if (k == Config.theme) " selected" else ""}>${Theme.label(k)}</option>" }}</select>
 <label><input type="checkbox" name="horn" value="on" ${if (Config.horn) "checked" else ""} style="width:auto"> Goal horn sound</label>
