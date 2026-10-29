@@ -132,7 +132,14 @@ object SetupServer {
 
     // Runs a full goal alert (banner, red light, horn) on whatever TV Dash screen is showing
     private fun testHorn(): String {
-        if (GoalWatch.listener == null) return "Open TV Dash on the TV first, then press Test horn again."
+        if (GoalWatch.listener == null) {
+            // Another app is on screen: test what a goal looks like there, the silent red edge glow
+            val ctx = app ?: return "Open TV Dash on the TV first, then press Test horn again."
+            EdgeGlow.check(ctx)
+            if (!EdgeGlow.allowed) return "Another app is on screen, and the red glow over other apps is off. Run the adb command in INSTALL.md to turn it on."
+            ui.post { EdgeGlow.show(ctx) }
+            return "Another app is on screen, so the TV shows the silent red glow (no horn in other apps)."
+        }
         ui.post { GoalFx.forceHorn = true; GoalWatch.listener?.invoke("Test from your phone") }
         return "Playing the goal horn on the TV."
     }
@@ -246,6 +253,6 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <form method="post" action="/update"><button>⬆ Update TV Dash</button></form>
 <form method="post" action="/test">
 <button style="background:#6F263D">🚨 Test horn</button>
-<small>Plays the goal banner, red light and horn on the TV, even if the horn is switched off.</small>
+<small>In TV Dash: banner, red light and horn (even if the horn is switched off). In another app such as Netflix: the silent red edge glow.</small>
 </form></main></body></html>"""
 }

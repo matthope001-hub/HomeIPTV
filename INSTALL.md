@@ -42,7 +42,7 @@ To update the phone app: when a newer version exists, an **⬆ Update this app**
 ### Goal horn
 The Avalanche goal horn is included at `app/src/main/res/raw/goal_horn.mp3` and is built into the app. To use a different sound, replace that file (keep the name lowercase, `.mp3`, `.ogg` or `.wav`) and build again. Only the first 10 seconds play, fading out at the end. Delete the file to go back to the horn generated in code.
 
-To hear it, open TV Dash on the TV, then on the phone setup page press **🚨 Test horn**.
+To hear it, open TV Dash on the TV, then on the phone setup page press **🚨 Test horn**. With another app such as Netflix on screen, the same button shows the silent red edge glow instead.
 
 ## 2. Get the TV ready (once)
 
