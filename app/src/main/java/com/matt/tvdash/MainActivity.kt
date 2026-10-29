@@ -104,8 +104,13 @@ class MainActivity : AppCompatActivity() {
         header.addView(text("TV Dash", 22f, true))
         val version = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "" }
         header.addView(text("  v$version", 11f, false).apply { setTextColor(Theme.silver) })
-        header.addView(text("📱 Phone setup: $url", 12f, false).apply { setTextColor(Theme.silver) },
-            LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
+        val setupLine = text("📱 Phone setup: $url", 12f, false).apply { setTextColor(Theme.silver) }
+        header.addView(setupLine, LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
+        // Check the setup page from inside the TV, so a phone/network problem can be told apart from an app problem
+        thread {
+            val problem = SetupServer.selfTest()
+            ui.post { setupLine.text = "📱 Phone setup: $url  " + (problem?.let { "✗ $it" } ?: "✓ working on the TV") }
+        }
         clock = text("", 20f, false); header.addView(clock)
         root.addView(header)
         root.addView(stripe(), LinearLayout.LayoutParams(-1, dp(4)).apply { topMargin = dp(6) })

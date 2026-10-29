@@ -34,6 +34,16 @@ object SetupServer {
         }
     }
 
+    /** Loads the setup page from inside the TV; null if it works, otherwise what went wrong */
+    fun selfTest(): String? = try {
+        Socket("127.0.0.1", port).use { s ->
+            s.soTimeout = 5_000
+            s.getOutputStream().write("GET / HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n".toByteArray())
+            val status = s.getInputStream().bufferedReader().readLine().orEmpty()
+            if (status.contains(" 200 ")) null else "answered: ${status.ifEmpty { "nothing" }}"
+        }
+    } catch (e: Exception) { e.javaClass.simpleName + (e.message?.let { ": $it" } ?: "") }
+
     fun stop() { server?.close(); server = null }
 
     private fun handle(c: Socket, prefs: Prefs) {
