@@ -101,7 +101,7 @@ object SetupServer {
         val playlists = form["playlists"].orEmpty().lines().map { it.trim() }.filter { it.startsWith("http") }
         val epg = form["epg"].orEmpty().trim().takeIf { it.isEmpty() || it.startsWith("http") }.orEmpty()
         val team = form["team"].orEmpty().trim().uppercase().filter { it.isLetter() }.take(3).ifEmpty { "COL" }
-        prefs.saveSettings(playlists, epg, team, form["horn"] == "on")
+        prefs.saveSettings(playlists, epg, team, form["horn"] == "on", form["english"] == "on")
         Config.load(prefs)
         ui.post { onSaved?.invoke() }
     }
@@ -133,6 +133,8 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <label>Playlists (one link per line)</label>
 <textarea name="playlists">${esc(Config.playlists.joinToString("\n"))}</textarea>
 <small>Free, legal M3U playlists, e.g. from iptv-org.</small>
+<label><input type="checkbox" name="english" value="on" ${if (Config.english) "checked" else ""} style="width:auto"> English channels only</label>
+<small>Offline channels are always hidden.</small>
 <label>TV guide link (optional)</label>
 <input name="epg" value="${esc(Config.epg)}" placeholder="Blank = use the playlist's own guide">
 <label>Favourite NHL team</label>

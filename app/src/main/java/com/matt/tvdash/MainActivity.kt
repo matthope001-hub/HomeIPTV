@@ -337,7 +337,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadChannels() {
         val my = ++gen
         thread {
-            val list = try { M3U.loadAll(Config.playlists) } catch (e: Exception) {
+            val list = try { M3U.loadAll(Config.playlists).let { if (Config.english) M3U.englishOnly(it) else it } } catch (e: Exception) {
                 ui.post { if (my == gen) status.text = "Couldn't load playlist: ${e.message}  ·  use $SETUP to change it" }
                 return@thread
             }

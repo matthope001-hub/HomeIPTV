@@ -18,6 +18,8 @@ import java.util.zip.GZIPInputStream
 const val PLAYLIST_URL = "https://iptv-org.github.io/iptv/countries/ca.m3u"
 // XMLTV guide (.xml or .xml.gz). Leave blank to use the playlist's own x-tvg-url header.
 const val EPG_URL = ""
+// Every English-language channel iptv-org lists; used for "English channels only"
+const val ENGLISH_URL = "https://iptv-org.github.io/iptv/languages/eng.m3u"
 
 // Live settings: the defaults above, changed from the phone setup page
 object Config {
@@ -25,11 +27,13 @@ object Config {
     @Volatile var epg: String = EPG_URL
     @Volatile var team: String = "COL"
     @Volatile var horn: Boolean = true
+    @Volatile var english: Boolean = true
     fun load(p: Prefs) {
         playlists = p.playlists().ifEmpty { listOf(PLAYLIST_URL) }
         epg = p.str("epg", EPG_URL)
         team = p.str("team", "COL")
         horn = p.str("horn", "on") == "on"
+        english = p.str("english", "on") == "on"
     }
 }
 
@@ -41,7 +45,7 @@ fun openStream(url: String): InputStream = URL(url).openConnection().run {
 
 fun httpGet(url: String): String = openStream(url).bufferedReader().use { it.readText() }
 
-data class Channel(val name: String, val group: String, val logo: String?, val url: String, val tvgId: String?)
+data class Channel(val name: String, val group: String, val logo: String?, val url: String, val tvgId: String?, val lang: String? = null)
 
 data class Tile(
     val key: String,
@@ -80,12 +84,25 @@ object M3U {
                 line.isNotEmpty() && !line.startsWith("#") && info != null -> {
                     val name = info.substringAfterLast(",").trim()
                     val group = attr(info, "group-title")?.split(";")?.first()?.ifBlank { null } ?: "Other"
-                    out += Channel(name, group, attr(info, "tvg-logo")?.ifBlank { null }, line, attr(info, "tvg-id")?.ifBlank { null })
+                    out += Channel(name, group, attr(info, "tvg-logo")?.ifBlank { null }, line, attr(info, "tvg-id")?.ifBlank { null },
+                        attr(info, "tvg-language")?.ifBlank { null })
                     info = null
                 }
             }
         }
         return out
+    }
+
+    /**
+     * Keeps English channels: ones whose tvg-language says English, or whose stream is on iptv-org's
+     * English list. If that list can't be loaded, nothing is removed.
+     */
+    fun englishOnly(list: List<Channel>): List<Channel> {
+        val keepEpg = epgUrl   // loading the English list must not replace the guide link
+        val english = try { load(ENGLISH_URL).map { it.url }.toSet() } catch (_: Exception) { emptySet() }
+        epgUrl = keepEpg
+        if (english.isEmpty()) return list
+        return list.filter { it.url in english || it.lang?.contains("English", ignoreCase = true) == true }
     }
 
     private fun attr(s: String, key: String): String? =
@@ -186,9 +203,9 @@ class Prefs(ctx: Context) {
     // Settings from the phone setup page
     fun playlists(): List<String> = str("playlists", "").split('\n').filter { it.isNotBlank() }
     fun str(key: String, def: String): String = sp.getString(key, def) ?: def
-    fun saveSettings(playlists: List<String>, epg: String, team: String, horn: Boolean) =
+    fun saveSettings(playlists: List<String>, epg: String, team: String, horn: Boolean, english: Boolean) =
         sp.edit().putString("playlists", playlists.joinToString("\n")).putString("epg", epg).putString("team", team)
-            .putString("horn", if (horn) "on" else "off").apply()
+            .putString("horn", if (horn) "on" else "off").putString("english", if (english) "on" else "off").apply()
 
     // Tile order you set with Move, per row
     fun order(row: String): List<String> = str("order_$row", "").split('\n').filter { it.isNotEmpty() }
