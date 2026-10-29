@@ -63,7 +63,7 @@ class TileAdapter(
 
     private fun refresh() {
         page = page.coerceIn(0, pages - 1)
-        shown = if (!paged) all else all.drop(page * per).take(per) + Tile(MORE, "More ▸\n${page + 1} / $pages")
+        shown = if (!paged) all else all.drop(page * per).take(per) + Tile(MORE, if (textOnly) "More ▸ ${page + 1}/$pages" else "More ▸\n${page + 1} / $pages")   // one line on short chips
         notifyDataSetChanged()
     }
 
