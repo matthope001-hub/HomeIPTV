@@ -97,4 +97,5 @@ Pull or download the latest code, build again (step 1), then repeat your install
 
 - **"App not installed"** with option B: a version signed on a different computer is already on the TV. Uninstall TV Dash first (**Settings ▸ Apps ▸ TV Dash ▸ Uninstall**), then install again. This clears its settings.
 - **`adb` can't find the TV:** the computer and TV must be on the same network; check the IP again (it can change after a router restart).
+- **Phone setup page address:** use the exact address shown in TV Dash's header. It's usually port 8080, but if the TV already uses 8080 TV Dash picks the next free port (8081, 8082…).
 - **Phone setup page won't open:** the phone must be on the same Wi-Fi as the TV, and TV Dash must be open.

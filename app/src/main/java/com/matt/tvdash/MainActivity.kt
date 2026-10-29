@@ -85,6 +85,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         Config.load(prefs)
+        SetupServer.start(prefs)   // start first: the address shown depends on the port it gets
         val url = setupUrl()
         unit = resources.displayMetrics.heightPixels / 540f
         val usable = resources.displayMetrics.widthPixels - 2 * dp(48)   // inside the TV-safe margins
@@ -211,7 +212,6 @@ class MainActivity : AppCompatActivity() {
         GoalWatch.start(this)
         GoalWatch.onGoalsChanged = { if (allChannels.isNotEmpty()) buildCategories(); if (category == GOALS) showChannels() }
         SetupServer.onSaved = { reload() }
-        SetupServer.start(prefs)
     }
 
     override fun onResume() {
@@ -451,7 +451,7 @@ class MainActivity : AppCompatActivity() {
                 .flatMap { it.inetAddresses.toList() }
                 .firstOrNull { it is Inet4Address && it.isSiteLocalAddress }?.hostAddress
         } catch (_: Exception) { null }
-        return "http://${ip ?: "<TV address>"}:${SetupServer.PORT}"
+        return "http://${ip ?: "<TV address>"}:${SetupServer.port}"
     }
 
     private fun qr(s: String, size: Int): Bitmap {

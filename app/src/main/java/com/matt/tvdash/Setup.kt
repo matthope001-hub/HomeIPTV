@@ -13,20 +13,22 @@ import kotlin.concurrent.thread
  * playlist links, TV guide link and favourite team.
  */
 object SetupServer {
-    const val PORT = 8080
+    // 8080 if it's free; otherwise the next free port up to 8090 (some TVs already use 8080)
+    var port = 8080
+        private set
     var onSaved: (() -> Unit)? = null
     private var server: ServerSocket? = null
     private val ui = Handler(Looper.getMainLooper())
 
     fun start(prefs: Prefs) {
         if (server != null) return
-        val s = try { ServerSocket(PORT) } catch (_: Exception) { return }
+        val s = (8080..8090).firstNotNullOfOrNull { p -> try { ServerSocket(p).also { port = p } } catch (_: Exception) { null } } ?: return
         server = s
         thread(isDaemon = true) {
             while (!s.isClosed) {
                 val c = try { s.accept() } catch (_: Exception) { break }
                 thread(isDaemon = true) {
-                    try { handle(c, prefs) } catch (_: Exception) { } finally { c.close() }
+                    try { handle(c, prefs) } catch (_: Throwable) { } finally { try { c.close() } catch (_: Exception) { } }
                 }
             }
         }
@@ -52,16 +54,23 @@ object SetupServer {
             String(buf, 0, n, Charsets.UTF_8)
         } else ""
 
-        val html = when {
-            method == "POST" && path == "/save" -> { save(body, prefs); page("Saved ✓ The TV is reloading channels.") }
-            method == "POST" && path == "/test" -> page(testHorn())
-            else -> page(null)
+        // If building the page fails, send the error text instead of hanging up, so it shows on the phone
+        val (status, html) = try {
+            "200 OK" to when {
+                method == "POST" && path == "/save" -> { save(body, prefs); page("Saved ✓ The TV is reloading channels.") }
+                method == "POST" && path == "/test" -> page(testHorn())
+                path == "/favicon.ico" -> ""
+                else -> page(null)
+            }
+        } catch (e: Throwable) {
+            "500 Internal Server Error" to "<pre>TV Dash setup page error:\n${esc(e.stackTraceToString())}</pre>"
         }
         val bytes = html.toByteArray()
         c.getOutputStream().apply {
-            write("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+            write("HTTP/1.1 $status\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
             write(bytes); flush()
         }
+        c.shutdownOutput()   // finish cleanly so the browser gets the whole page before the socket closes
     }
 
     private fun readLine(i: InputStream): String {
