@@ -3,6 +3,20 @@
 For the RCA 55" 4K Google TV (RTGU5570), or any Google TV / Android TV.
 You build the app on your computer once, then send it to the TV over Wi-Fi (option A), a USB stick (option B), or straight from Android Studio (option C).
 
+## Quickest: download it on the TV (no computer)
+
+GitHub builds the app every time the code changes. The newest build is always at:
+`https://github.com/matthope001-hub/HomeIPTV/releases/latest/download/TVDash.apk`
+
+1. On the TV, install **Downloader** (by AFTVnews) from the Play Store.
+2. Allow it to install apps: **Settings ▸ Apps ▸ Security & restrictions ▸ Unknown sources** → turn on **Downloader**.
+3. Open Downloader, type the link above into its address box and press **Go**. When it finishes, choose **Install**.
+4. Afterwards choose **Delete** in Downloader to remove the downloaded file.
+
+To update later, repeat step 3; your favourites and settings are kept. GitHub builds and your own computer's builds share one signing key (`tvdash-debug.keystore`), so either can install over the other.
+
+**First time only:** if Install says **App not installed**, an older copy signed with a different key is on the TV. Uninstall TV Dash (**Settings ▸ Apps ▸ TV Dash ▸ Uninstall**), then install again. This clears favourites and settings once.
+
 ## 1. Build the app on your computer
 
 1. Install [Android Studio](https://developer.android.com/studio).
