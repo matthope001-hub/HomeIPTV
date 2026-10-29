@@ -11,6 +11,11 @@ on:
 permissions:
   contents: write
 
+# One build publishes at a time, so two quick pushes can't remove each other's download
+concurrency:
+  group: publish-apk
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -30,6 +35,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk TVDash.apk
-          gh release delete latest -y --cleanup-tag || true
-          gh release create latest TVDash.apk --title "TV Dash (latest)" \
-            --notes "Built from ${GITHUB_SHA::7}. Download on the TV with the Downloader app, see INSTALL.md."
+          cp TVDash.apk tvdash.apk   # TV keyboards often type lowercase
+          notes="Built from ${GITHUB_SHA::7}. Download on the TV with the Downloader app, see INSTALL.md."
+          # Replace the files in place, so the download link never goes missing
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest TVDash.apk tvdash.apk --clobber
+            gh release edit latest --notes "$notes"
+          else
+            gh release create latest TVDash.apk tvdash.apk --title "TV Dash (latest)" --notes "$notes"
+          fi
