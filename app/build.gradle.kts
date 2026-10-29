@@ -13,6 +13,16 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    // One shared key for debug builds (your computer and GitHub), so any build installs over any other.
+    // It only signs this personal sideloaded app; it is not a Play Store key.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("tvdash-debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
     buildTypes { release { isMinifyEnabled = false } }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
