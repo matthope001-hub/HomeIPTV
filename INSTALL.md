@@ -5,9 +5,8 @@ You build the app on your computer once, then send it to the TV over Wi-Fi (opti
 
 ## Quickest: download it on the TV (no computer)
 
-GitHub builds the app every time the code changes. The newest build is always at:
-`https://github.com/matthope001-hub/HomeIPTV/releases/latest/download/TVDash.apk`
-(all lowercase works too: `.../download/tvdash.apk`)
+GitHub builds the app every time the code changes and saves it in the repo. The newest build is always at:
+`https://raw.githubusercontent.com/matthope001-hub/HomeIPTV/main/apk/tvdash.apk`
 
 1. On the TV, install **Downloader** (by AFTVnews) from the Play Store.
 2. Allow it to install apps: **Settings ▸ Apps ▸ Security & restrictions ▸ Unknown sources** → turn on **Downloader**.

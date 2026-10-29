@@ -1,11 +1,12 @@
-# Builds the app on every push to main and publishes it as the "latest" release,
+# Builds the app on every push to main and saves it as apk/tvdash.apk in the repo,
 # so the TV can download it directly:
-# https://github.com/matthope001-hub/HomeIPTV/releases/latest/download/TVDash.apk
+# https://raw.githubusercontent.com/matthope001-hub/HomeIPTV/main/apk/tvdash.apk
 name: Build APK
 
 on:
   push:
     branches: [main]
+    paths-ignore: ["apk/**"]
   workflow_dispatch:
 
 permissions:
@@ -30,13 +31,14 @@ jobs:
           gradle-version: "8.7"
       - name: Build
         run: gradle assembleDebug --no-daemon
-      - name: Publish as latest release
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Save the APK in the repo
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk TVDash.apk
-          cp TVDash.apk tvdash.apk   # TV keyboards often type lowercase
-          # Each build gets its own release (build-N); /releases/latest/download/ always points at the newest
-          gh release create "build-${GITHUB_RUN_NUMBER}" TVDash.apk tvdash.apk --latest \
-            --title "TV Dash build ${GITHUB_RUN_NUMBER}" \
-            --notes "Built from ${GITHUB_SHA::7}. Download on the TV with the Downloader app, see INSTALL.md."
+          set -x
+          mkdir -p apk
+          cp app/build/outputs/apk/debug/app-debug.apk apk/tvdash.apk
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apk/tvdash.apk
+          git commit -m "Build APK from ${GITHUB_SHA::7} [skip ci]" || exit 0
+          git pull --rebase origin main
+          git push origin HEAD:main
