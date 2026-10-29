@@ -25,7 +25,7 @@ class TileAdapter(
     private val wDp: Int,
     private val hDp: Int,
     private val unit: Float,
-    private val textSize: Float,
+    private val labelSize: Float,   // not "textSize": inside TextView.apply that name means the view's own size
     private val textOnly: Boolean = false,
     private val onClick: (Tile) -> Unit,
     private val onLong: (Tile) -> Unit = {}
@@ -117,7 +117,7 @@ class TileAdapter(
         }
         val label = TextView(p.context).apply {
             setTextColor(Color.WHITE)
-            setTextSize(TypedValue.COMPLEX_UNIT_PX, textSize * unit)
+            setTextSize(TypedValue.COMPLEX_UNIT_PX, labelSize * unit)
             gravity = Gravity.CENTER
             maxLines = 2
             ellipsize = TextUtils.TruncateAt.END
