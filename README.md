@@ -11,6 +11,7 @@ An Android TV dashboard for free, legal IPTV playlists, themed in Colorado Avala
 - Goal horn and flashing red goal light with every goal alert. Plays the Avalanche horn in `app/src/main/res/raw/goal_horn.mp3` (first 10 seconds); without that file it falls back to a horn generated in code. Turn the horn off, or press Test horn to try it, on the phone setup page
 - Silent red edge glow over other apps (Netflix etc.) when your team scores; needs one adb command, see INSTALL.md
 - "🚨 Goals" category: today's goals with scorer; OK opens the NHL highlight clip, or shows a QR code to watch it on your phone
+- **TV Dash Remote** phone app (`remote/`): the same settings from your Android phone, no browser needed. See INSTALL.md
 - Phone setup page: open "📱 Phone setup" on the TV, scan the QR code, and change playlists, TV guide link and team from your phone (same Wi-Fi, port 8080)
 - Player: ▲/▼ change channel, Back jumps to the last channel (Back again to exit)
 - Screensaver after 5 minutes idle

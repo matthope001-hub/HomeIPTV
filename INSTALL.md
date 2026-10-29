@@ -19,6 +19,17 @@ Without the button, repeat step 3; your favourites and settings are kept. GitHub
 
 **First time only:** if Install says **App not installed**, an older copy signed with a different key is on the TV. Uninstall TV Dash (**Settings ▸ Apps ▸ TV Dash ▸ Uninstall**), then install again. This clears favourites and settings once.
 
+## Phone app: TV Dash Remote
+
+Change TV Dash's settings from your Android phone (playlists, guide, team, horn, English-only, centre-ice picture, test horn).
+
+1. On the phone, open this link and download the file:
+   `https://raw.githubusercontent.com/matthope001-hub/HomeIPTV/main/apk/remote.apk`
+2. Open the downloaded file and choose **Install**. The first time, the phone asks you to allow your browser to install apps: allow it, then go back and install.
+3. Open **TV Dash Remote**, make sure TV Dash is open on the TV, and press **Find TV** (or type the address shown in TV Dash's header and press **Connect**).
+
+To update the phone app, download and install the same link again.
+
 ## 1. Build the app on your computer
 
 1. Install [Android Studio](https://developer.android.com/studio).

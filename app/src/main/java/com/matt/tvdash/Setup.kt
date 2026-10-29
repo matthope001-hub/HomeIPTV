@@ -85,6 +85,7 @@ object SetupServer {
                 method == "POST" && path == "/test" -> page(testHorn())
                 method == "POST" && path == "/photo" -> page(savePhoto(raw, type))
                 method == "POST" && path == "/photo-remove" -> { photoFile()?.delete(); ui.post { onPhoto?.invoke() }; page("Picture removed.") }
+                path == "/api/settings" -> settingsJson()   // read by the TV Dash Remote phone app
                 path == "/favicon.ico" -> ""
                 else -> page(null)
             }
@@ -93,7 +94,7 @@ object SetupServer {
         }
         val bytes = html.toByteArray()
         c.getOutputStream().apply {
-            write("HTTP/1.1 $status\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+            write("HTTP/1.1 $status\r\nContent-Type: ${if (path.startsWith("/api/")) "application/json" else "text/html; charset=utf-8"}\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
             write(bytes); flush()
         }
         c.shutdownOutput()   // finish cleanly so the browser gets the whole page before the socket closes
@@ -128,6 +129,16 @@ object SetupServer {
         ui.post { GoalFx.forceHorn = true; GoalWatch.listener?.invoke("Test from your phone") }
         return "Playing the goal horn on the TV."
     }
+
+    // Current settings for the phone app
+    private fun settingsJson(): String = org.json.JSONObject()
+        .put("playlists", org.json.JSONArray(Config.playlists))
+        .put("epg", Config.epg)
+        .put("team", Config.team)
+        .put("horn", Config.horn)
+        .put("english", Config.english)
+        .put("version", app?.let { it.packageManager.getPackageInfo(it.packageName, 0).versionName }.orEmpty())
+        .toString()
 
     /** Where the centre-ice picture is kept on the TV (never uploaded anywhere) */
     fun photoFile(): File? = app?.let { File(it.filesDir, "centre_ice.jpg") }
