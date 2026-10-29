@@ -11,7 +11,7 @@ android {
         minSdk = 24
         targetSdk = 34
         versionCode = 1
-        versionName = "1.0"
+        versionName = "1.0." + (System.getenv("GITHUB_RUN_NUMBER") ?: "local")   // GitHub build number, shown in the header
     }
     // One shared key for debug builds (your computer and GitHub), so any build installs over any other.
     // It only signs this personal sideloaded app; it is not a Play Store key.

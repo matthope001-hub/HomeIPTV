@@ -100,6 +100,8 @@ class MainActivity : AppCompatActivity() {
         // Header
         val header = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
         header.addView(text("TV Dash", 22f, true))
+        val version = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "" }
+        header.addView(text("  v$version", 11f, false).apply { setTextColor(Theme.silver) })
         header.addView(text("📱 Phone setup: $url", 12f, false).apply { setTextColor(Theme.silver) },
             LinearLayout.LayoutParams(0, -2, 1f).apply { marginStart = dp(16) })
         clock = text("", 20f, false); header.addView(clock)
