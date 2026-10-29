@@ -78,9 +78,9 @@ object M3U {
                     epgUrl = (attr(line, "x-tvg-url") ?: attr(line, "url-tvg"))?.split(",")?.first()?.trim()?.ifBlank { null }
                 line.startsWith("#EXTINF") -> info = line
                 line.isNotEmpty() && !line.startsWith("#") && info != null -> {
-                    val name = info!!.substringAfterLast(",").trim()
-                    val group = attr(info!!, "group-title")?.split(";")?.first()?.ifBlank { null } ?: "Other"
-                    out += Channel(name, group, attr(info!!, "tvg-logo")?.ifBlank { null }, line, attr(info!!, "tvg-id")?.ifBlank { null })
+                    val name = info.substringAfterLast(",").trim()
+                    val group = attr(info, "group-title")?.split(";")?.first()?.ifBlank { null } ?: "Other"
+                    out += Channel(name, group, attr(info, "tvg-logo")?.ifBlank { null }, line, attr(info, "tvg-id")?.ifBlank { null })
                     info = null
                 }
             }

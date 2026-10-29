@@ -81,8 +81,8 @@ class MainActivity : AppCompatActivity() {
     private var allChannels: List<Channel> = emptyList()
     private var category = FAV
 
-    override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         Config.load(prefs)
         val url = setupUrl()
@@ -276,7 +276,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     // Any key wakes the dashboard; that key press is swallowed so it doesn't also click something
-    override fun dispatchKeyEvent(e: KeyEvent): Boolean {
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        val e = event
         resetIdle()
         mover?.let { m ->
             if (e.action == KeyEvent.ACTION_DOWN) when (e.keyCode) {

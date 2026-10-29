@@ -32,8 +32,8 @@ class PlayerActivity : AppCompatActivity() {
     private lateinit var prefs: Prefs
     private lateinit var channels: List<Channel>
 
-    override fun onCreate(b: Bundle?) {
-        super.onCreate(b)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         channels = Session.channels   // own copy: the dashboard list can change while we play
         idx = intent.getIntExtra("idx", 0)
