@@ -2,7 +2,9 @@ package com.matt.tvdash
 
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.Color
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -87,7 +89,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         prefs = Prefs(this)
         Config.load(prefs)
-        SetupServer.start(prefs)   // start first: the address shown depends on the port it gets
+        SetupServer.start(this, prefs)   // start first: the address shown depends on the port it gets
         val url = setupUrl()
         unit = resources.displayMetrics.heightPixels / 540f
         val usable = resources.displayMetrics.widthPixels - 2 * dp(48)   // inside the TV-safe margins
@@ -222,6 +224,7 @@ class MainActivity : AppCompatActivity() {
         GoalWatch.start(this)
         GoalWatch.onGoalsChanged = { if (allChannels.isNotEmpty()) buildCategories(); if (category == GOALS) showChannels() }
         SetupServer.onSaved = { reload() }
+        SetupServer.onPhoto = { root.background = rink(); saver.background = rink() }
     }
 
     override fun onResume() {
@@ -237,7 +240,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         ui.removeCallbacksAndMessages(null)
-        GoalWatch.onGoalsChanged = null; SetupServer.stop(); SetupServer.onSaved = null
+        GoalWatch.onGoalsChanged = null; SetupServer.stop(); SetupServer.onSaved = null; SetupServer.onPhoto = null
         super.onDestroy()
     }
 
@@ -487,6 +490,10 @@ class MainActivity : AppCompatActivity() {
 
     // Add your own image as app/src/main/res/drawable/centre_ice.png to show it at centre ice
     private fun rink(): RinkBackground {
+        // A picture uploaded from the phone setup page wins over one built into the app
+        SetupServer.photoFile()?.takeIf { it.exists() }?.let { f ->
+            BitmapFactory.decodeFile(f.path)?.let { return RinkBackground(BitmapDrawable(resources, it)) }
+        }
         val logoId = resources.getIdentifier("centre_ice", "drawable", packageName)
         return RinkBackground(if (logoId != 0) getDrawable(logoId)?.mutate() else null)
     }

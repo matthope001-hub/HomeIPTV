@@ -1,7 +1,14 @@
 package com.matt.tvdash
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Matrix
+import android.media.ExifInterface
 import android.os.Handler
 import android.os.Looper
+import java.io.ByteArrayInputStream
+import java.io.File
 import java.io.InputStream
 import java.net.ServerSocket
 import java.net.Socket
@@ -17,10 +24,13 @@ object SetupServer {
     var port = 8080
         private set
     var onSaved: (() -> Unit)? = null
+    var onPhoto: (() -> Unit)? = null   // the centre-ice picture changed
+    private var app: Context? = null
     private var server: ServerSocket? = null
     private val ui = Handler(Looper.getMainLooper())
 
-    fun start(prefs: Prefs) {
+    fun start(ctx: Context, prefs: Prefs) {
+        app = ctx.applicationContext
         if (server != null) return
         val s = (8080..8090).firstNotNullOfOrNull { p -> try { ServerSocket(p).also { port = p } } catch (_: Exception) { null } } ?: return
         server = s
@@ -53,22 +63,28 @@ object SetupServer {
         val method = request.getOrElse(0) { "" }
         val path = request.getOrElse(1) { "/" }
         var len = 0
+        var type = ""
         while (true) {
             val h = readLine(input)
             if (h.isEmpty()) break
             if (h.lowercase().startsWith("content-length:")) len = h.substringAfter(":").trim().toIntOrNull() ?: 0
+            if (h.lowercase().startsWith("content-type:")) type = h.substringAfter(":").trim()
         }
-        val body = if (len in 1..65_536) {
+        // Up to 25 MB, so a full-size phone photo fits
+        val raw = if (len in 1..25_000_000) {
             val buf = ByteArray(len); var n = 0
             while (n < len) { val r = input.read(buf, n, len - n); if (r < 0) break; n += r }
-            String(buf, 0, n, Charsets.UTF_8)
-        } else ""
+            buf.copyOf(n)
+        } else ByteArray(0)
+        val body = if (raw.size <= 65_536) String(raw, Charsets.UTF_8) else ""
 
         // If building the page fails, send the error text instead of hanging up, so it shows on the phone
         val (status, html) = try {
             "200 OK" to when {
                 method == "POST" && path == "/save" -> { save(body, prefs); page("Saved ✓ The TV is reloading channels.") }
                 method == "POST" && path == "/test" -> page(testHorn())
+                method == "POST" && path == "/photo" -> page(savePhoto(raw, type))
+                method == "POST" && path == "/photo-remove" -> { photoFile()?.delete(); ui.post { onPhoto?.invoke() }; page("Picture removed.") }
                 path == "/favicon.ico" -> ""
                 else -> page(null)
             }
@@ -113,6 +129,41 @@ object SetupServer {
         return "Playing the goal horn on the TV."
     }
 
+    /** Where the centre-ice picture is kept on the TV (never uploaded anywhere) */
+    fun photoFile(): File? = app?.let { File(it.filesDir, "centre_ice.jpg") }
+
+    // Takes the photo out of the form upload, turns it upright, crops the middle square and shrinks it
+    private fun savePhoto(raw: ByteArray, type: String): String {
+        val boundary = type.substringAfter("boundary=", "").trim('"')
+        val text = String(raw, Charsets.ISO_8859_1)   // one char per byte, so positions match the bytes
+        val name = text.indexOf("filename=")
+        if (boundary.isEmpty() || name < 0) return "No picture received. Choose a photo first."
+        val start = text.indexOf("\r\n\r\n", name).takeIf { it >= 0 }?.plus(4) ?: return "Couldn't read the upload."
+        val end = text.indexOf("\r\n--$boundary", start).takeIf { it >= 0 } ?: return "Couldn't read the upload."
+        val bytes = raw.copyOfRange(start, end)
+
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0) return "That file isn't a picture the TV can read. Try a JPG or PNG."
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 800) sample *= 2
+        var bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return "That file isn't a picture the TV can read."
+        val turn = when (ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, 1)) {
+            ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+            ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+            ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+            else -> 0f
+        }
+        val side = minOf(bmp.width, bmp.height)
+        bmp = Bitmap.createBitmap(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side,
+            Matrix().apply { postRotate(turn) }, true)
+        val f = photoFile() ?: return "The TV isn't ready yet. Try again."
+        f.outputStream().use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
+        ui.post { onPhoto?.invoke() }
+        return "Picture saved ✓ It's at centre ice now."
+    }
+
     private fun esc(s: String) = s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;")
 
     private fun page(msg: String?) = """<!doctype html><html><head><meta charset="utf-8">
@@ -145,6 +196,13 @@ ${if (msg != null) "<div class=\"msg\">${esc(msg)}</div>" else ""}
 <small>Red edge glow over other apps (Netflix etc.): ${if (EdgeGlow.allowed) "On ✓" else "Off. Run the adb command in INSTALL.md, then open TV Dash."}</small>
 <button>Save</button>
 </form>
+<form method="post" action="/photo" enctype="multipart/form-data">
+<label>Centre-ice picture</label>
+<input type="file" name="photo" accept="image/*">
+<button>Upload picture</button>
+<small>Shown faintly at centre ice. It stays on the TV and isn't uploaded anywhere else.</small>
+</form>
+<form method="post" action="/photo-remove"><button style="background:#333">Remove picture</button></form>
 <form method="post" action="/test">
 <button style="background:#6F263D">🚨 Test horn</button>
 <small>Plays the goal banner, red light and horn on the TV, even if the horn is switched off.</small>
