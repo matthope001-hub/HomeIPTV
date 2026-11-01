@@ -98,6 +98,18 @@ Then open TV Dash once. The phone setup page shows **Red edge glow over other ap
 
 TV Dash keeps a small background watcher running for this. Some streaming apps block other apps from drawing over them, and then the glow won't show there.
 
+## Copy a phone app onto the TV (e.g. Cogeco EPICO)
+
+Some apps (like Cogeco EPICO) have no Google TV version. You can copy the official copy from your Android phone onto the TV; TV Dash then shows it in the Apps row. It may not work: the TV needs a new enough Android version, the app is designed for touch, and the provider may refuse unknown devices.
+
+1. On the phone: **Settings ▸ About phone ▸ Build number** 7 times, then **Developer options ▸ USB debugging** on. Plug the phone into the computer and press **Allow** on the phone.
+2. TV on, with USB debugging on (step 2 above).
+3. In Android Studio's Terminal, from the `HomeIPTV` folder:
+   ```bash
+   .\copy-app-to-tv.ps1
+   ```
+   (For another app: `.\copy-app-to-tv.ps1 -Package the.app.package`.) It copies the app off the phone, installs it on the TV and tells you if the TV's Android is too old for it.
+
 ## Open it on the TV
 
 **Apps ▸ See all** (or Your apps) ▸ **TV Dash**. To keep it handy, long-press it and choose **Add to favourites** so it shows on the Google TV home screen.

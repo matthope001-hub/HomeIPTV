@@ -334,8 +334,10 @@ class MainActivity : AppCompatActivity() {
     private fun loadApps() {
         val pm = packageManager
         val pinned = prefs.get("apps")
-        val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER)
-        val tiles = pm.queryIntentActivities(intent, 0)
+        // TV apps, plus phone apps copied onto the TV (they have no TV launcher entry)
+        val tv = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER), 0)
+        val phone = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+        val tiles = (tv + phone)
             .filter { it.activityInfo.packageName != packageName }
             .map {
                 val pkg = it.activityInfo.packageName
